@@ -130,11 +130,43 @@ plotQualityProfile(fnFs[1:2])    # forward reads
 plotQualityProfile(fnRs[1:2])    # reverse reads
 ```
 
+*Question:* look at the file names first — where do these files come from, and what
+does each part of a name mean?
+
+::: {.callout-tip collapse="true" title="Answer"}
+Take `APP1small_SRR6041847_1.fastq.gz`: **APP1** = appressoria, replicate 1;
+**small** = a subsample made for this course so the files stay manageable;
+**SRR6041847** = the run accession in NCBI's Sequence Read Archive, where the
+authors deposited the raw data (study GSE103878, Liang et al. 2018) — you could
+download the full-size original from there yourself; **_1** = the forward mate of
+the read pair (`_2` is the reverse); **.fastq.gz** = compressed FASTQ. Being able to
+decode a sequencing file name is worth more than it looks: it is how you catch
+swapped or duplicated files later.
+:::
+
 Read the plots: the grey heat map is the frequency of each quality score at each
 position, the green line the median. Two features are typical of Illumina data and
 both matter for what you do next: the first few cycles are noisier, and quality
 decays towards the 3' end — and the **reverse reads are consistently worse** than the
 forward reads, because they are sequenced last, after the cluster has degraded.
+
+*Question:* by the way — what is the length of these reads?
+
+::: {.callout-tip collapse="true" title="Answer"}
+**150 bp.** You can read it straight off the quality profile: the x-axis (cycle =
+position in the read) runs to 150, and the sequencer produces one base per cycle.
+Both mates are 150 bp, so this is 2x150 bp paired-end Illumina data. To check it
+from the data rather than the plot:
+
+```r
+library(ShortRead)
+fq <- readFastq(fnFs[1])
+table(width(fq))          # every read: 150
+```
+
+Knowing the read length matters immediately: it is the upper bound for `truncLen`
+in §1.4, and after `trimLeft = 10` your forward reads are effectively 140 bp.
+:::
 
 *Your turn:* plot a forward and a reverse profile of the **same** sample next to
 each other. Which is worse, and where?
@@ -204,6 +236,26 @@ out                                # reads.in vs reads.out per sample
 round(100 * out[, "reads.out"] / out[, "reads.in"], 1)   # % kept
 ```
 
+*Question (big-data aside):* what would happen if R loaded an entire FASTQ file
+into memory? How does `filterAndTrim` deal with this — and if you set
+`multithread = TRUE`, how many parallel threads could be started, and how does that
+relate to the memory of the machine?
+
+::: {.callout-tip collapse="true" title="Answer"}
+Our course files are subsampled, but a real FASTQ from one sample is routinely
+**several gigabytes compressed** — tens of gigabytes as text. Loading a few of those
+whole would exhaust the RAM of almost any machine and crash the session. dada2
+avoids this by **streaming**: the file is read in chunks of a fixed number of reads,
+each chunk is filtered and written out, and memory use stays constant no matter how
+big the file is.
+
+With `multithread = TRUE`, one worker can run per CPU core — on an ERDA DAG session
+that is up to **8**. But each worker holds its own chunk in memory, so the real
+limit is *threads x memory-per-thread must fit in the machine's RAM* (16 GB on
+DAG). More threads is faster only until you hit that ceiling — which is why "just
+use all the cores" is not automatically the right call on a shared machine.
+:::
+
 *Your turn:* re-run with `truncLen = c(150, 150)` (no truncation of the reverse
 reads) into a **different** output folder and compare the percentages. Why does
 keeping more sequence cost you reads?
@@ -240,6 +292,7 @@ Then paste:
 ```bash
 cd ~/work/module2
 ls -al                    # check: kallisto, the .fasta, and the reads folder
+./kallisto                # prints its usage text -> the program itself works
 
 # 1. Build the index once (takes a few minutes)
 ./kallisto index -i C_fructicola_GSE103878.idx GSE103878_1104.transcripts.fasta
@@ -521,6 +574,23 @@ sum(res$padj < 0.05 & res$log2FoldChange > 0, na.rm = TRUE)   # up in APP
 sum(is.na(res$padj))                # removed by independent filtering — that is normal
 ```
 
+*Question:* re-run `results()` **without** `alpha = 0.05` (the default is 0.1). How
+many genes are significantly up-regulated now, and why does the number change?
+
+::: {.callout-tip collapse="true" title="Answer"}
+```r
+res10 <- results(dds, contrast = c("condition", "APP", "CON"))   # default alpha = 0.1
+summary(res10)
+sum(res10$padj < 0.1, na.rm = TRUE)
+```
+More genes pass. Two things moved at once: the reporting threshold itself
+(padj < 0.1 instead of < 0.05), and DESeq2's **independent filtering**, which is
+optimised *for the alpha you declare* — so even the padj values themselves can
+differ slightly between the two runs. The practical lesson: `alpha` is part of your
+method, so state it in your report, and set it to the threshold you actually intend
+to use.
+:::
+
 ## 3.6 MA plot and volcano plot
 
 ```r
@@ -551,6 +621,19 @@ head(up[order(-up$log2FoldChange), c("Row.names", "log2FoldChange", "padj", "Ann
 
 write.csv(out, "~/work/module2/DE_APP_vs_CON.csv")   # saved under ~/work = kept
 ```
+
+*Question:* which column of the results table should you use to find the "most
+differentially expressed" genes — and what do its values actually mean?
+
+::: {.callout-tip collapse="true" title="Answer"}
+For *most changed in expression*, rank on **`log2FoldChange`**: it is the effect
+size, on a log2 scale, so +2 means 4x higher in APP than CON and −3 means 8x lower.
+`padj` answers a different question — how strong the *evidence* is, not how big the
+change is: a gene can have a tiny fold change with a minuscule padj just because it
+is measured very precisely. Report both. For ranking by fold change specifically,
+DESeq2's `lfcShrink()` gives *shrunken* estimates that stop lowly-expressed, noisy
+genes from topping the list with huge but meaningless fold changes.
+:::
 
 Most of the extreme fold changes belong to hypothetical proteins — normal for a
 fungal genome, and a reminder that a big log2FC is not the same as an interpretable
