@@ -121,39 +121,29 @@ it before or alongside the class.
 ::: {.schedule}
 | Date | Time | What happens | Slides / materials | Section |
 |:--|:--|:--|:--|:--|
-| **Week 39**<br>**Mon 21-09** | 13:00–13:20 | Module introduction: the plan for the next three weeks | `Module2_overview_2026.pdf` | |
-| | 13:20–14:30 | **Lecture** — introduction to transcriptomics: what RNAseq measures, experimental design, replication | `Transcriptomics_Introduction2026.pdf` | [§1](#sec-qc) |
-| | 14:30–14:45 | *Break* | | |
-| | 14:45–15:15 | **Lecture** — read quality: Phred scores, expected errors, what to trim and why | *(same deck)* | [§1.1–1.3](#sec-qc) |
-| | 15:15–17:00 | **Exercise** — quality profiles, choosing the filter parameters, `filterAndTrim` | `ReadQC_Exercise_2025.html`<br>`C_fructicola_GSE103878_small.zip` | [§1.4](#sec-qc) |
-| **Wed 23-09** | 09:00–10:00 | **Lecture** — read mapping and pseudoalignment; why kallisto is fast | `Transcriptomics_ReadMapping2026.pdf` | [§2](#sec-mapping) |
-| | 10:00–10:15 | *Break* | | |
-| | 10:15–12:00 | **Exercise** — `kallisto index` and `kallisto quant` in the terminal | `Read_mapping_2025.html` · `kallisto` | [§2](#sec-mapping) |
+| **Week 39**<br>**Mon 21-09**<br>13:00–16:00 | 13:00–14:40 | Transcriptomics introduction lecture and exercise on read-quality filtering and trimming | `Transcriptomics_Introduction2026.pdf`<br>`ReadQC_Exercise_2025.html`<br>`C_fructicola_GSE103878_small.zip` | [§1](#sec-qc) |
+| | 14:40–15:00 | *Break* | | |
+| | 15:00–16:00 | Continued with exercise on read-quality filtering and trimming | *(as above)* | [§1.4](#sec-qc) |
+| **Wed 23-09**<br>09:00–12:00<br>13:00–16:30 | 09:00–12:00 | Read-mapping: lecture and start on exercises | `Transcriptomics_ReadMapping2026.pdf`<br>`Read_mapping_2025.html` · `kallisto` | [§2](#sec-mapping) |
 | | 12:00–13:00 | *Lunch* | | |
-| | 13:00–14:45 | **Exercise** — from nine abundance files to one count table | `CountTable_2025.html`<br>`abundance_files_from_kallisto.zip` | [§2.1–2.5](#sec-mapping) |
+| | 13:00–15:00 | Read-mapping exercise continued and count table exercise | `CountTable_2025.html`<br>`abundance_files_from_kallisto.zip` | [§2.1–2.5](#sec-mapping) |
 | | 14:45–15:00 | *Break* | | |
-| | 15:00–17:00 | **Exercise** — set up the DESeq2 data set and start the analysis | `Transcriptomics_differentialExpression_2025.Rmd` | [§3](#sec-de) |
-| **Week 40**<br>**Mon 28-09** | 13:00–14:00 | **Lecture** — differential expression: normalisation, size factors, dispersion, the negative binomial model | `Transcriptomics_DiffExpression2026.pdf` | [§3.1–3.4](#sec-de) |
-| | 14:00–14:45 | **Lecture** — multiple testing: why 14,000 tests need an adjusted p-value; FDR and Benjamini–Hochberg | *(same deck)* | [§3.10](#sec-de) |
-| | 14:45–15:00 | *Break* | | |
-| | 15:00–17:00 | **Exercise** — run DESeq2, read the results table, MA and volcano plots | `Transcriptomics_differentialExpression_2025.html`<br>`C_fructicola_counts.zip` | [§3.5–3.9](#sec-de) |
-| **Wed 30-09** | 09:00–12:00 | **Group work** — start the 2nd assignment (*Coccidioides posadasii*, Ryp1) | `GroupAssignment2025.html`<br>`CountTable_GroupExercise2025.csv` · `Annot_GroupExercise2025.csv` | [§5](#sec-assignment) |
+| | 15:00–16:00 | Count table exercise continued | *(as above)* | [§2.3](#sec-mapping) |
+| **Week 40**<br>**Mon 28-09**<br>13:00–16:00 | 13:00–14:00 | Differential gene expression analysis theory lecture | `Transcriptomics_DiffExpression2026.pdf` | [§3.1–3.4](#sec-de) |
+| | 14:00–16:00 | Begin with differential gene expression analysis using DESeq2 | `Transcriptomics_differentialExpression_2025.html` / `.Rmd`<br>`C_fructicola_counts.zip` | [§3.5–3.10](#sec-de) |
+| **Wed 30-09**<br>09:00–12:00<br>13:00–16:30 | 09:00–11:00 | Differential gene expression exercise continued | *(as above)* | [§3](#sec-de) |
+| | 11:00–12:00 | **Guest lecture:** KU server specialist | | |
 | | 12:00–13:00 | *Lunch* | | |
-| | 13:00–14:00 | **Lecture** — enrichment analysis: gene sets, Fisher's exact test, GSEA; clustering | `Transcriptomics_EnrichmentAnalysis2026.pdf` | [§4](#sec-enrich) |
-| | 14:00–14:15 | *Break* | | |
-| | 14:15–15:30 | **Exercise** — the hypergeometric test by hand, clustering, enrichment per cluster | | [§4.3–4.7](#sec-enrich) |
-| | 15:30–17:00 | **Group work** — continue the 2nd assignment | | [§5](#sec-assignment) |
-| **Week 41**<br>**Mon 05-10** | 13:00–15:00 | **Group work** — finish the 2nd assignment | | [§5](#sec-assignment) |
-| | **15:00** | **Hand-in of the 2nd group assignment** | | |
-| | 15:00–15:15 | *Break* | | |
-| | 15:15–16:15 | Walk through the suggested solutions | `GroupAssignmentAnswers2025.html` | |
-| | 16:15–17:00 | **Wrap-up** — what to take from this module into the exam | | |
+| | 13:00–14:00 | Enrichment analysis lecture | `Transcriptomics_EnrichmentAnalysis2026.pdf` | [§4](#sec-enrich) |
+| | 14:00–16:00 | Start work on group hand-in exercise | `GroupAssignment2025.html`<br>`CountTable_GroupExercise2025.csv` · `Annot_GroupExercise2025.csv` | [§4](#sec-enrich), [§5](#sec-assignment) |
+| **Week 41**<br>**Mon 05-10**<br>13:00–16:00 | 13:00–15:00 | Continue work on group hand-in exercise | *(as above)* | [§5](#sec-assignment) |
+| | **15:00** | **Hand-in group exercise** | | |
+| | 15:00–16:00 | Wrap-up lecture on the Transcriptomics module | `GroupAssignmentAnswers2025.html` | |
 :::
 
-Timings inside a day are indicative — we will move breaks around to fit where the
-class actually is. The module's own overview sheet, the same plan as a printable PDF,
-is `Module2_overview_2026.pdf`; all slides and exercise files live in the
-**Module 2 — Transcriptomics** folder on Absalon.
+The time plan is tentative and will be adjusted during teaching. All slides and
+exercise files live in the **Module 2 — Transcriptomics** folder on Absalon; the same
+plan as a printable sheet is `Module2_overview_2026.pdf`.
 
 **Required reading**, to be done *before* the session it belongs to:
 
@@ -166,8 +156,11 @@ DESeq2 papers, and [R for Data Science](https://r4ds.hadley.nz/). All lecture sl
 and PDFs are in the Module 2 folder on Absalon.
 
 ::: {.provenance}
-Times and dates follow the posted **Course Schedule 2026**. Sessions are tentative and
-may be adjusted during teaching — Absalon is the authority if the two ever disagree.
+The dates come from the posted **Course Schedule 2026**; the block-by-block times come
+from the module's own **overview sheet**, which is the more accurate account of how a
+teaching day actually runs. Note the two disagree on when a day ends — the course
+schedule says 17:00, the overview sheet 16:00 (16:30 on Wednesdays) — and this table
+follows the overview sheet. Absalon is the authority if anything changes.
 :::
 
 ---
