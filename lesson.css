@@ -1,7 +1,8 @@
 /* ------------------------------------------------------------------
-   Module 2 hybrid lesson: visual separation of the two kinds of work.
-   .runs-here  = executes in the browser (webR)
-   .run-local  = must be run in RStudio on ERDA / your own machine
+   Module 2 workbook styles.
+   .run-local  = files & setup box (blue)
+   .terminal   = shell commands for RStudio's Terminal tab (amber)
+   .provenance = data-provenance / caveat note
    ------------------------------------------------------------------ */
 
 :root {
@@ -32,7 +33,7 @@
 .run-local > :last-child { margin-bottom: 0.4em; }
 
 .run-local::before {
-  content: "🖥️  RUN THIS LOCALLY — RStudio on ERDA (not in this page)";
+  content: "📁  FILES & SETUP";
   display: block;
   font-weight: 700;
   font-size: 0.82rem;
@@ -50,28 +51,36 @@
   border-radius: 4px;
 }
 
-/* ---------- "runs here" marker ---------- */
-.runs-here {
-  border: 1px solid rgba(47, 125, 79, 0.35);
-  border-left: 5px solid var(--browser-accent);
-  background: var(--browser-bg);
+/* ---------- terminal block ---------- */
+.terminal {
+  border: 1px solid rgba(90, 70, 20, 0.45);
+  border-left: 5px solid #8a6508;
+  background: #f7f3ea;
   border-radius: 6px;
   padding: 0.9em 1.1em 0.6em;
   color: var(--ink);
   margin: 1.4em 0;
 }
 
-.runs-here > p:first-child { margin-top: 0; }
-.runs-here > :last-child { margin-bottom: 0.4em; }
+.terminal > p:first-child { margin-top: 0; }
+.terminal > :last-child { margin-bottom: 0.4em; }
 
-.runs-here::before {
-  content: "▶  RUNS HERE — edit the code and press Run";
+.terminal::before {
+  content: "⌨  TERMINAL — paste into RStudio's Terminal tab, not the R console";
   display: block;
   font-weight: 700;
   font-size: 0.82rem;
   letter-spacing: 0.03em;
-  color: var(--browser-accent);
+  color: #8a6508;
   margin-bottom: 0.6em;
+}
+
+.terminal pre,
+.terminal code {
+  color: var(--ink);
+  background: #fffdf7;
+  border: 1px solid rgba(138, 101, 8, 0.25);
+  border-radius: 4px;
 }
 
 /* ---------- data-provenance / caveat note ---------- */
@@ -138,12 +147,15 @@ body.quarto-dark .run-local code {
 }
 body.quarto-dark .run-local::before { color: #6ea8ff; }
 
-body.quarto-dark .runs-here {
-  background: var(--browser-bg-dark);
-  border-color: rgba(90, 190, 130, 0.4);
-  color: #dcefe2;
+body.quarto-dark .terminal {
+  background: #241d0e;
+  border-color: rgba(214, 170, 60, 0.4);
+  color: #f0e4c8;
 }
-body.quarto-dark .runs-here::before { color: #6fd394; }
+body.quarto-dark .terminal::before { color: #e0b544; }
+body.quarto-dark .terminal pre, body.quarto-dark .terminal code {
+  background: #191307; color: #f0e4c8; border-color: rgba(214, 170, 60, 0.3);
+}
 
 body.quarto-dark .provenance {
   background: var(--warn-bg-dark);
