@@ -84,14 +84,13 @@ got it right.
 :::
 
 ::: {.run-local}
-Blocks like this **cannot run in a browser**. `DESeq2`, `dada2` and `kallisto` are
-not available here — they need a real R installation or a terminal. Copy this code
-into **RStudio on ERDA** and run it there. Each block lists exactly which files you
-need and where to get them on Absalon.
+Blocks like this run in **RStudio on ERDA** — everything in this module is installed
+and run there, nothing on your own machine. Each block is **copy-paste ready**: all
+paths assume one folder, **`~/work/module2`**, so if you put the Absalon files where
+the block says, the code runs verbatim with no editing.
 
-New to ERDA, or not sure how to start RStudio there? See
-[the appendix](#sec-erda) — it walks through logging in, starting a session,
-getting your files in, and finding the terminal.
+New to ERDA? [The appendix](#sec-erda) walks through starting RStudio there, sets up
+the `module2` folder, and lists every file to fetch from Absalon and where to put it.
 :::
 
 The two are not alternatives. The browser cells are where you learn *what the method
@@ -177,19 +176,18 @@ to throw away. That decision is the whole point of this session — `filterAndTr
 is just the function that carries it out.
 
 ::: {.run-local}
-**Get the data.** On Absalon, Module 2 → Exercises → `C_fructicola_GSE103878_small.zip`
-(139 MB). Unzip it into your working directory on ERDA.
-
-::: {.filelist}
-C_fructicola_GSE103878_small/
-&nbsp;&nbsp;APP1small_SRR6041847_1.fastq.gz &nbsp; APP1small_SRR6041847_2.fastq.gz
-&nbsp;&nbsp;... 18 files total = 9 samples x 2 mates (forward `_1`, reverse `_2`)
-:::
+**Get the data.** On Absalon, Module 2 → Exercises, download
+`C_fructicola_GSE103878_small.zip` (139 MB). In the ERDA file manager, upload it into
+your **`module2`** folder ([appendix](#sec-erda) if you have not made it yet), then
+**right-click the zip → Unpack**. You now have
+`~/work/module2/C_fructicola_GSE103878_small/` with 18 files — 9 samples x 2 mates
+(forward `_1`, reverse `_2`). Then paste, block by block:
 
 ```r
 library(dada2)
-path  <- "~/Rworkdir/C_fructicola_small"     # adjust to your own path
-list.files(path)
+
+path <- "~/work/module2/C_fructicola_GSE103878_small"
+list.files(path)                 # you should see the 18 fastq.gz files
 
 # Sort forward and reverse files so the two vectors stay in the same sample order
 fnFs <- sort(list.files(path, pattern = "_1.fastq.gz", full.names = TRUE))
@@ -360,26 +358,36 @@ they should agree closely.
 [Wednesday 23-09]{.session-chip}
 
 ::: {.run-local}
-**kallisto runs in a terminal, not in R.** Open a Terminal on ERDA. You need the
-transcript FASTA and your filtered reads from Session 1.
+**kallisto runs in a terminal, not in R.** In RStudio, click the **Terminal** tab
+(next to Console). From Absalon, put the `kallisto` program file and the transcripts
+FASTA (`GSE103878_1104.transcripts.fasta`) directly into `~/work/module2` first.
+Then paste:
 
 ```bash
+cd ~/work/module2
+ls -al                    # check: kallisto, the .fasta, and the reads folder
+
 # 1. Build the index once (takes a few minutes)
-kallisto index -i C_fructicola_GSE103878.idx GSE103878_1104.transcripts.fasta
+./kallisto index -i C_fructicola_GSE103878.idx GSE103878_1104.transcripts.fasta
 
-# 2. Quantify one sample (paired-end: forward file then reverse file)
+# 2. Quantify one sample (paired-end: forward file, then reverse file)
 mkdir -p results
-kallisto quant -i C_fructicola_GSE103878.idx -o ./results/APP1 -t 2 \
-    APP1_SRR6041847_F_filt.fastq.gz APP1_SRR6041847_R_filt.fastq.gz
+./kallisto quant -i C_fructicola_GSE103878.idx -o results/APP1 -t 2 \
+    C_fructicola_GSE103878_small/filtered/APP1small_SRR6041847_F_filt.fastq.gz \
+    C_fructicola_GSE103878_small/filtered/APP1small_SRR6041847_R_filt.fastq.gz
 
-# 3. Repeat for every sample. Each run writes results/<SAMPLE>/abundance.tsv
+# 3. Repeat for every sample — only the sample name changes.
+#    Each run writes results/<SAMPLE>/abundance.tsv
 ```
+
+The `./` in `./kallisto` means "the program file in this folder" — without it the
+terminal looks for an installed program and reports `command not found`.
 
 Useful terminal commands: `cd dirname` (enter a directory), `cd ..` (go up),
 `ls -al` (list with detail), `mkdir xx` (create), `pwd` (where am I).
 
-If your run does not finish, Absalon has the finished output:
-`abundance_files_from_kallisto.zip`.
+If your own run does not finish, Absalon has the finished output:
+`abundance_files_from_kallisto.zip` — unpack it into `~/work/module2` and carry on.
 :::
 
 This is what kallisto produced for the nine samples — one `abundance.tsv` each,
@@ -704,13 +712,16 @@ plot(hclust(d), labels = samples, main = "Sample clustering", xlab = "", sub = "
 
 ::: {.run-local}
 **The DESeq2 workflow itself.** Everything above prepared you to read its output;
-this is how you produce it. Files from Absalon: `C_fructicola_counts.zip`
-(`GSE103878_1104.genes.count.txt` and `GSE103878_1104_genes_annot.tab`).
+this is how you produce it. From Absalon, upload `C_fructicola_counts.zip` into
+`~/work/module2` and **right-click → Unpack** — that gives you
+`~/work/module2/C_fructicola_counts/` with the count table and the annotation.
+Then paste:
 
 ```r
 library(DESeq2)
 
-countdata <- read.delim("GSE103878_1104.genes.count.txt", row.names = 1)
+countdata <- read.delim("~/work/module2/C_fructicola_counts/GSE103878_1104.genes.count.txt",
+                        row.names = 1)
 coldata   <- data.frame(
   row.names = colnames(countdata),
   condition = factor(sub("[0-9]+$", "", colnames(countdata)))
@@ -733,9 +744,10 @@ summary(res)
 plotMA(res)
 
 # annotate and export
-annot <- read.delim("GSE103878_1104_genes_annot.tab")
+annot <- read.delim("~/work/module2/C_fructicola_counts/GSE103878_1104_genes_annot.tab")
 out   <- merge(as.data.frame(res), annot, by.x = "row.names", by.y = "ID", all.x = TRUE)
 head(out[order(out$padj), ], 10)
+write.csv(out, "~/work/module2/DE_APP_vs_CON.csv")   # saved under ~/work = kept
 ```
 
 The `res` object this produces is the table loaded as `de` in the cells below — so
@@ -1200,7 +1212,8 @@ from InterProScan or eggNOG-mapper output and pass them to `fgsea` as a named li
 a different organism — *Coccidioides posadasii*, the fungus causing Valley Fever — and
 asks about the transcription factor Ryp1 and spherule formation.
 
-Files on Absalon (Module 2 → Group Work):
+Files on Absalon (Module 2 → Group Work) — download all three and put the two CSVs
+straight into `~/work/module2`:
 
 ::: {.filelist}
 GroupAssignment2025.html &nbsp;&nbsp;— the questions<br>
@@ -1208,11 +1221,11 @@ CountTable_GroupExercise2025.csv &nbsp;&nbsp;— counts, 4 conditions x 2 replic
 Annot_GroupExercise2025.csv &nbsp;&nbsp;— gene annotations
 :::
 
-Note both CSVs are **semicolon**-separated:
+Both CSVs are **semicolon**-separated, so it is `read.csv2`, not `read.csv`:
 
 ```r
-counts <- read.csv2("CountTable_GroupExercise2025.csv", row.names = 1)
-annot  <- read.csv2("Annot_GroupExercise2025.csv")
+counts <- read.csv2("~/work/module2/CountTable_GroupExercise2025.csv", row.names = 1)
+annot  <- read.csv2("~/work/module2/Annot_GroupExercise2025.csv")
 ```
 
 You hand in an **Rmarkdown document** with every group member's name at the top,
@@ -1299,48 +1312,58 @@ DAG sessions: you get **8 cores and 16 GB of memory**, a session is **terminated
 after 2 hours of inactivity**, and the machine itself is **non-persistent** — see
 the next point.
 
-## 3. Know where your files live
+## 3. One-time setup: the `module2` folder
 
-Your ERDA files are mounted inside the session at:
+Your ERDA files appear inside every session at `~/work` (in full:
+`/home/jovyan/work/`). **Everything in this module lives in one folder inside it.**
+Make it once — paste into the RStudio console:
 
+```r
+dir.create("~/work/module2", showWarnings = FALSE)
 ```
-~/work          which in full is   /home/jovyan/work/
-```
 
-That is why the exercises use paths like
-`/home/jovyan/work/Rworkdir/C_fructicola_small`.
+(Or in the ERDA file manager: right-click → New Folder → `module2`.)
+
+That one folder is the whole convention. Every code block on this page reads and
+writes `~/work/module2/...`, so once the files below are in place, every block runs
+by copy-paste alone.
 
 ::: {.provenance}
-**Keep everything under `~/work`.** In ERDA's own words, spawned instances are
+**Only `~/work` survives.** In ERDA's own words, spawned instances are
 non-persistent: *any change made during a session is lost once the server is
 terminated — the only exception is data saved in the provided mount directory
 (`~/work`)*. And sessions do terminate: after 2 hours of inactivity, automatically.
-If in doubt, save to `~/work` and check the file appears in the ERDA file manager.
+Save everything under `~/work/module2` and it is there next session.
 :::
 
-## 4. Get the course data into your session
+## 4. The files: Absalon → ERDA
 
-The exercise data comes as ERDA **share links** posted on Absalon. Two ways to handle
-files, and you can mix them freely:
+Everything comes from **Absalon → Module 2 — Transcriptomics**. Download from
+Absalon to your computer, upload into `~/work/module2` in the ERDA file manager,
+and for zips: **right-click → Unpack**. This table is the complete list:
 
-**In the ERDA file manager** (the normal ERDA web page):
+| Get from Absalon | Put in ERDA | Used in |
+|:--|:--|:--|
+| `C_fructicola_GSE103878_small.zip` (139 MB) | unpack in `module2` → gives `C_fructicola_GSE103878_small/` | Session 1–2 |
+| `kallisto` (the program file) | straight into `module2` | Session 2 |
+| `GSE103878_1104.transcripts.fasta` | straight into `module2` | Session 2 |
+| `abundance_files_from_kallisto.zip` | unpack in `module2` *(backup if your kallisto run fails)* | Session 2 |
+| `C_fructicola_counts.zip` | unpack in `module2` → gives `C_fructicola_counts/` | Session 3 |
+| `CountTable_GroupExercise2025.csv` | straight into `module2` | Assignment |
+| `Annot_GroupExercise2025.csv` | straight into `module2` | Assignment |
 
-- create a folder for the module
-- upload the `.zip` you got from Absalon or a share link
-- **right-click the zip → unpack**
-
-**Inside RStudio** (the **Files** tab, bottom-right pane):
-
-- **New Folder** to create directories
-- **Rename**, and look under **More** for the rest of the options
-
-A sensible layout for this module:
+When it is all in place, `~/work/module2` looks like this:
 
 ```
-~/work/Rworkdir/                     your working directory
-    C_fructicola_small/              the FASTQ reads (Session 1)
-    results/                         kallisto output (Session 2)
+~/work/module2/
+    C_fructicola_GSE103878_small/    the reads (Session 1; filtered/ appears inside)
+    kallisto                         the program (Session 2)
+    GSE103878_1104.transcripts.fasta
+    results/                         your kallisto output (Session 2)
+    abundance_files_from_kallisto/   backup kallisto output
     C_fructicola_counts/             count table + annotation (Session 3)
+    CountTable_GroupExercise2025.csv
+    Annot_GroupExercise2025.csv      the assignment data
 ```
 
 ## 5. Find the terminal — you need it for kallisto
@@ -1384,24 +1407,14 @@ gone when the session ends.
 |:--|:--|
 | Session will not start, or times out | Wait and try again; a stuck session usually clears. Note sessions end after 2 h of inactivity. |
 | R packages missing (`library(dada2)` fails) | You started the wrong notebook image. Stop the server (JupyterHub → Home) and start it again with **Big Data in Biotechnology Notebook**. |
-| Cannot see your files in RStudio | You are probably not under `~/work`. Run `getwd()` and `setwd("~/work/...")`. |
+| Cannot see your files in RStudio | You are probably not under `~/work`. Run `getwd()`; the module folder is `~/work/module2`. |
 | Work disappeared after a session ended | Only `~/work` persists. Anything saved elsewhere was on the temporary machine. |
 | `kallisto: command not found` | You are missing the `./` — the program is a file in your folder, so run `./kallisto`. |
-| A path in the exercise does not exist | The exercises use the author's own path. Substitute your own folder under `~/work`. |
+| A path from this page does not exist | A file from the §4 table is missing or a zip was not unpacked — check `~/work/module2` against the layout above. (The exercise HTMLs on Absalon use the author's own paths; the ones on this page are the canonical ones.) |
 | Everything is slow | Big files (the 139 MB read set) take time to upload and unpack. This is normal. |
 
 If ERDA itself is broken rather than your code, mail **support@erda.dk** — they
 usually reply within one working day.
-
-## Working on your own machine instead
-
-You can, but you take on the setup. Install [R](https://cran.r-project.org/) and
-[RStudio](https://posit.co/download/rstudio-desktop/), then install the packages
-yourself — `tidyverse` from CRAN, and `dada2` and `DESeq2` through `BiocManager`.
-`kallisto` needs the binary for your operating system (choose the **Linux** build if
-you are putting it on ERDA, macOS or Windows for your own laptop). Expect to spend
-some time on it, and note that the teachers can only reliably help with the ERDA
-setup.
 
 ::: {.provenance}
 This appendix condenses the course's own **R Studio on ERDA** slide deck (Absalon →
