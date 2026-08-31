@@ -85,7 +85,8 @@ plan as a printable sheet is `Module2_overview_2026.pdf`.
 - Session 3 — the DESeq2 workflow vignette, *RNA-seq workflow: gene-level exploratory
   analysis and differential expression* (focus on chapters 3, 4, 5 and 6)
 
-Suggested background: [RNA-seqlopedia](https://rnaseq.uoregon.edu), the kallisto and
+Suggested background: [RNA-seqlopedia](https://web.archive.org/web/20250218131813/https://rnaseq.uoregon.edu/) (via the
+Internet Archive — the original site is offline), the kallisto and
 DESeq2 papers, and [R for Data Science](https://r4ds.hadley.nz/).
 
 ::: {.provenance}
