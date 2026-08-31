@@ -118,6 +118,7 @@ Module 2 runs over course weeks 4, 5 and 6 (weeks 39–41), taught by **Marek**.
 last column links to the part of this page that goes with each session — work through
 it before or alongside the class.
 
+::: {.schedule}
 | Date | Time | Topic | Slides | On this page |
 |:--|:--|:--|:--|:--|
 | **Wk 39**<br>Mon 21-09 | 13:00–17:00 | Transcriptomics: theory, experimental planning, quality control | `Transcriptomics_Introduction2026.pdf` | [Session 1](#sec-qc) |
@@ -129,6 +130,7 @@ it before or alongside the class.
 | **Wk 41**<br>Mon 05-10 | 13:00–15:00 | Finish the 2nd assignment | — | [Session 5](#sec-assignment) |
 | | **15:00** | **Hand-in of the 2nd group assignment** | | |
 | | 15:00–17:00 | Go through solutions; module wrap-up | — | |
+:::
 
 The module's own overview sheet — the same time plan as a printable PDF — is
 `Module2_overview_2026.pdf`. All slides live in the **Module 2 — Transcriptomics**

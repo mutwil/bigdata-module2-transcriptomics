@@ -154,3 +154,21 @@ body.quarto-dark .provenance::before { color: #e0b544; }
 
 body.quarto-dark .filelist { background: rgba(255, 255, 255, 0.06); color: #dce6f5; }
 body.quarto-dark .session-chip { background: #2b333d; color: #c7d0da; }
+
+/* ---------- schedule table ----------
+   Keep dates and the section links on one line; only the Topic and Slides
+   columns are allowed to wrap. The wrapper scrolls rather than pushing the
+   whole page sideways on a narrow screen. */
+.schedule { overflow-x: auto; }
+.schedule table { font-size: 0.92rem; }
+.schedule th, .schedule td { vertical-align: top; }
+.schedule td:nth-child(1),
+.schedule td:nth-child(2),
+.schedule td:nth-child(5),
+.schedule th:nth-child(5) { white-space: nowrap; }
+.schedule td:nth-child(4) code {
+  font-size: 0.78rem;
+  white-space: nowrap;
+  background: transparent;
+  padding: 0;
+}
