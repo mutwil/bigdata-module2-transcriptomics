@@ -155,7 +155,7 @@ forward reads, because they are sequenced last, after the cluster has degraded.
 ::: {.callout-tip collapse="true" title="Answer"}
 **150 bp.** You can read it straight off the quality profile: the x-axis (cycle =
 position in the read) runs to 150, and the sequencer produces one base per cycle.
-Both mates are 150 bp, so this is 2x150 bp paired-end Illumina data. To check it
+Both mates are 150 bp, so this is $2 \times 150$ bp paired-end Illumina data. To check it
 from the data rather than the plot:
 
 ```r
@@ -184,7 +184,11 @@ that is where truncation will help most.
 `filterAndTrim(maxEE = 2)` does not count bad bases. It converts each quality score
 to an error probability and adds them up:
 
-&nbsp;&nbsp;&nbsp;&nbsp;P(error) = 10^(−Q/10)&nbsp;&nbsp;&nbsp;→&nbsp;&nbsp;&nbsp;EE = Σᵢ 10^(−Qᵢ/10)
+$$
+P(\text{error}) = 10^{-Q/10}
+\qquad\Longrightarrow\qquad
+EE = \sum_{i} 10^{-Q_i/10}
+$$
 
 A read is discarded when its expected number of errors exceeds `maxEE`. Convince
 yourself with ten quality scores from a real read:
@@ -627,7 +631,8 @@ differentially expressed" genes — and what do its values actually mean?
 
 ::: {.callout-tip collapse="true" title="Answer"}
 For *most changed in expression*, rank on **`log2FoldChange`**: it is the effect
-size, on a log2 scale, so +2 means 4x higher in APP than CON and −3 means 8x lower.
+size on a $\log_2$ scale, so $+2$ means $2^2 = 4\times$ higher in APP than CON and
+$-3$ means $2^3 = 8\times$ lower.
 `padj` answers a different question — how strong the *evidence* is, not how big the
 change is: a gene can have a tiny fold change with a minuscule padj just because it
 is measured very precisely. Report both. For ranking by fold change specifically,
@@ -734,9 +739,16 @@ matters.
 ## 4.2 The hypergeometric test, by hand
 
 The lecture's question — *is the overlap larger than expected by random sampling?* —
-is answered by the hypergeometric distribution. Four numbers define it: `N` the
-universe, `n` your DE list, `K` the genes of the set inside the universe, `k` the
-overlap.
+is answered by the hypergeometric distribution. Four numbers define it: $N$ the
+universe, $n$ your DE list, $K$ the genes of the set inside the universe, $k$ the
+overlap. The p-value is the probability of an overlap at least as large by chance:
+
+$$
+P(X \ge k) \;=\; \sum_{j=k}^{\min(n,\,K)}
+\frac{\binom{K}{j}\binom{N-K}{\,n-j\,}}{\binom{N}{n}}
+$$
+
+which is exactly what `phyper()` computes.
 
 ```r
 set_genes <- gene_sets$gene[gene_sets$term_name == "Cytochrome P450"]
