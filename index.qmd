@@ -115,11 +115,11 @@ curated GO annotation shipped with the course data.
 # Schedule {#sec-schedule}
 
 Module 2 runs over course weeks 4, 5 and 6 (weeks 39–41), taught by **Marek**. The
-last column links to the part of this page that goes with each session — work through
+**Section** column links to the part of this page that goes with each block — work through
 it before or alongside the class.
 
 ::: {.schedule}
-| Date | Time | What happens | Slides / materials | On this page |
+| Date | Time | What happens | Slides / materials | Section |
 |:--|:--|:--|:--|:--|
 | **Week 39**<br>**Mon 21-09** | 13:00–13:20 | Module introduction: the plan for the next three weeks | `Module2_overview_2026.pdf` | |
 | | 13:20–14:30 | **Lecture** — introduction to transcriptomics: what RNAseq measures, experimental design, replication | `Transcriptomics_Introduction2026.pdf` | [§1](#sec-qc) |
