@@ -156,25 +156,29 @@ body.quarto-dark .filelist { background: rgba(255, 255, 255, 0.06); color: #dce6
 body.quarto-dark .session-chip { background: #2b333d; color: #c7d0da; }
 
 /* ---------- schedule table ----------
-   Keep dates and the section links on one line; only the Topic and Slides
-   columns are allowed to wrap. The wrapper scrolls rather than pushing the
-   whole page sideways on a narrow screen. */
+   Fixed layout with explicit widths: without it the long file names in the
+   materials column push the table wider than the page and clip the last column,
+   while squeezing the description into six-line wraps. */
 .schedule { overflow-x: auto; }
-.schedule table { font-size: 0.92rem; }
+.schedule table { table-layout: fixed; width: 100%; font-size: 0.9rem; }
 .schedule th, .schedule td { vertical-align: top; }
-.schedule td:nth-child(1),
-.schedule td:nth-child(2),
-.schedule td:nth-child(5),
-.schedule th:nth-child(5) { white-space: nowrap; }
+
+.schedule th:nth-child(1), .schedule td:nth-child(1) { width: 8.5%; }
+.schedule th:nth-child(2), .schedule td:nth-child(2) { width: 8.5%; white-space: nowrap; }
+.schedule th:nth-child(3), .schedule td:nth-child(3) { width: 41%; }
+.schedule th:nth-child(4), .schedule td:nth-child(4) { width: 30%; font-size: 0.84rem; line-height: 1.4; }
+.schedule th:nth-child(5), .schedule td:nth-child(5) { width: 12%; white-space: nowrap; }
+
+/* file names may break rather than widen the table */
 .schedule td:nth-child(4) code {
-  font-size: 0.78rem;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   background: transparent;
   padding: 0;
+  font-size: 0.82rem;
 }
 
 /* Break and lunch rows are scaffolding, not content — mute them so the eye
-   skips to the teaching blocks. They are the rows whose third cell is italic. */
+   skips to the teaching blocks. */
 .schedule td em { color: #7a8794; font-style: italic; }
-.schedule td:nth-child(4) { font-size: 0.86rem; line-height: 1.35; }
 body.quarto-dark .schedule td em { color: #93a1b0; }
