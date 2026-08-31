@@ -1,0 +1,1215 @@
+---
+title: "Module 2 — Transcriptomics (interactive)"
+subtitle: "Big Data in Biotechnology NPLK19000U · the R runs in your browser, no install"
+format:
+  live-html:
+    toc: true
+    toc-depth: 3
+    css:
+      - editor-theme.css
+      - lesson.css
+    include-after-body:
+      - save-work.html
+      - external-links.html
+      - fold-cells.html
+    resources:
+      - data
+engine: knitr
+live:
+  show-hints: true
+  show-solutions: true
+---
+
+{{< include ./_extensions/r-wasm/live/_knitr.qmd >}}
+
+```{webr}
+#| autorun: true
+#| echo: false
+#| edit: false
+#| output: false
+# ---------------------------------------------------------------------------
+# Hidden setup — runs automatically when the page opens.
+# Everything DESeq2 / dada2 / kallisto produced was pre-computed and saved as
+# small CSVs; here we just read them in.
+# ---------------------------------------------------------------------------
+
+counts_df <- read.csv("data/counts.csv", check.names = FALSE)
+annot     <- read.csv("data/annotation.csv")
+meta      <- read.csv("data/metadata.csv")
+sf_deseq  <- read.csv("data/size_factors.csv")
+vst_df    <- read.csv("data/vst.csv", check.names = FALSE)
+de        <- read.csv("data/de_APP_vs_CON.csv")
+de_cih    <- read.csv("data/de_CIH_vs_CON.csv")
+gene_sets <- read.csv("data/gene_sets.csv")
+qual      <- read.csv("data/quality_profiles.csv")
+retention <- read.csv("data/read_retention.csv")
+kal       <- read.csv("data/kallisto_summary.csv")
+
+# --- count matrix: genes in rows, samples in columns -----------------------
+CNT <- as.matrix(counts_df[, -1])
+rownames(CNT) <- counts_df$gene
+mode(CNT) <- "integer"
+
+# --- variance-stabilised matrix (what DESeq2's vst() returned) -------------
+VST <- as.matrix(vst_df[, -1])
+rownames(VST) <- vst_df$gene
+
+samples   <- colnames(CNT)                       # CON1..IL3
+condition <- meta$condition[match(samples, meta$sample)]
+cond_col  <- c(CON = "#4C72B0", APP = "#DD8452", CIH = "#55A868", IL = "#C44E52")
+
+# --- quick lookup: gene id -> functional annotation ------------------------
+ann <- setNames(annot$annotation, annot$gene)
+ann[is.na(ann) | ann == "" | ann == "---NA---"] <- "no annotation"
+
+# --- feedback helper used by the fill-in-the-blank cells -------------------
+say <- function(ok, right, hint) {
+  if (isTRUE(ok)) cat("\n✅ ", right, "\n", sep = "")
+  else            cat("\n\U0001F4A1 ", hint, "\n", sep = "")
+  invisible(NULL)
+}
+
+cat(sprintf("Data loaded: %d genes x %d samples.\n", nrow(CNT), ncol(CNT)))
+```
+
+# How this page works
+
+Module 2 has two kinds of work in it, and this page keeps them clearly apart.
+
+::: {.runs-here}
+Cells like this **run in your browser**. There is nothing to install and nothing to
+break — edit the code, press **Run**, and the result appears underneath. Where you
+see `______` you have to fill something in; running the cell tells you whether you
+got it right.
+:::
+
+::: {.run-local}
+Blocks like this **cannot run in a browser**. `DESeq2`, `dada2` and `kallisto` are
+not available here — they need a real R installation or a terminal. Copy this code
+into **RStudio on ERDA** and run it there. Each block lists exactly which files you
+need and where to get them on Absalon.
+:::
+
+The two are not alternatives. The browser cells are where you learn *what the method
+does and how to read its output*; the local blocks are where you actually run the
+pipeline on real files, which is what the group assignment and the exam expect of you.
+
+::: {.provenance}
+Every number on this page comes from the real Module 2 dataset: RNAseq of the fungal
+plant pathogen *Colletotrichum fructicola* (Liang et al. 2018, *BMC Genomics* 19:557),
+four growth forms with three replicates each — **CON** conidia, **APP** appressoria,
+**CIH** cellophane infectious hyphae, **IL** infected apple leaf.
+
+The quality profiles were computed from the actual FASTQ files, the abundances are
+real kallisto output, and the differential expression results were produced by
+DESeq2's algorithm on the full count matrix. **One exception, stated plainly:** the
+gene sets in Session 4 are *keyword-derived* functional categories built from the
+annotation text (all genes whose description matches `cytochrome p450`, and so on).
+They are not curated GO or PFAM terms. The enrichment *method* you practise is
+exactly the real one; the categories are a stand-in, because this genome has no
+curated GO annotation shipped with the course data.
+:::
+
+---
+
+# Session 1 — Read quality control {#sec-qc}
+[Monday 21-09]{.session-chip}
+
+Before anything is mapped or counted, you have to look at the reads and decide what
+to throw away. That decision is the whole point of this session — `filterAndTrim()`
+is just the function that carries it out.
+
+::: {.run-local}
+**Get the data.** On Absalon, Module 2 → Exercises → `C_fructicola_GSE103878_small.zip`
+(139 MB). Unzip it into your working directory on ERDA.
+
+::: {.filelist}
+C_fructicola_GSE103878_small/
+&nbsp;&nbsp;APP1small_SRR6041847_1.fastq.gz &nbsp; APP1small_SRR6041847_2.fastq.gz
+&nbsp;&nbsp;... 18 files total = 9 samples x 2 mates (forward `_1`, reverse `_2`)
+:::
+
+```r
+library(dada2)
+path  <- "~/Rworkdir/C_fructicola_small"     # adjust to your own path
+list.files(path)
+
+# Sort forward and reverse files so the two vectors stay in the same sample order
+fnFs <- sort(list.files(path, pattern = "_1.fastq.gz", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern = "_2.fastq.gz", full.names = TRUE))
+
+plotQualityProfile(fnFs[1:2])    # forward reads
+plotQualityProfile(fnRs[1:2])    # reverse reads
+```
+
+Those two plots are what the next cells reproduce here, from the same files.
+:::
+
+## 1.1 The quality profile
+
+`plotQualityProfile()` draws one thing: the distribution of Phred quality scores at
+each position (cycle) along the read. We pre-computed that summary for all 18 files.
+
+```{webr}
+# One row per sample x mate x cycle.
+head(qual, 3)
+
+# Look at the forward reads (mate 1) of sample CON1
+q1 <- qual[qual$sample == "CON1" & qual$mate == 1, ]
+
+plot(q1$cycle, q1$mean_q, type = "n",
+     ylim = c(20, 42), xlab = "Cycle (position along the read)",
+     ylab = "Phred quality score", main = "CON1 forward reads")
+# the interquartile band: 25th-75th percentile of quality at each cycle
+polygon(c(q1$cycle, rev(q1$cycle)), c(q1$q25, rev(q1$q75)),
+        col = adjustcolor("#2f7d4f", 0.18), border = NA)
+lines(q1$cycle, q1$mean_q, lwd = 2, col = "#2f7d4f")
+abline(h = 30, lty = 2, col = "red")     # Q30 = 1 error in 1000 bases
+legend("bottomleft", c("mean Q", "Q25-Q75 band", "Q30"), bty = "n",
+       lty = c(1, NA, 2), lwd = c(2, NA, 1), pch = c(NA, 15, NA),
+       col = c("#2f7d4f", adjustcolor("#2f7d4f", 0.3), "red"))
+```
+
+Two features are typical of Illumina data and both matter for what you do next: the
+first few cycles are noisier, and quality decays towards the 3' end.
+
+## 1.2 Forward versus reverse reads
+
+```{webr}
+# Fill in the mate number for the REVERSE reads.
+mate_rev <- ______            # <- blank
+
+fwd <- qual[qual$sample == "CON1" & qual$mate == 1,        ]
+rev <- qual[qual$sample == "CON1" & qual$mate == mate_rev, ]
+
+plot(fwd$cycle, fwd$mean_q, type = "l", lwd = 2, col = "#4C72B0", ylim = c(20, 42),
+     xlab = "Cycle", ylab = "Mean Phred quality", main = "CON1: forward vs reverse")
+lines(rev$cycle, rev$mean_q, lwd = 2, col = "#C44E52")
+abline(h = 30, lty = 2)
+legend("bottomleft", c("forward (_1)", "reverse (_2)"), lwd = 2,
+       col = c("#4C72B0", "#C44E52"), bty = "n")
+
+cat("mean quality  forward:", round(mean(fwd$mean_q), 2),
+    " reverse:", round(mean(rev$mean_q), 2), "\n")
+
+say(identical(mate_rev, 2),
+    "reverse reads are mate 2 — and they are consistently worse than the forward reads. That is normal: the reverse read is sequenced last, after the cluster has degraded.",
+    "the files are named _1 (forward) and _2 (reverse) — set mate_rev <- 2.")
+```
+
+## 1.3 Expected errors — the number `maxEE` actually filters on
+
+`filterAndTrim(maxEE = 2)` does not count bad bases. It converts each quality score
+to an error probability and adds them up:
+
+&nbsp;&nbsp;&nbsp;&nbsp;P(error) = 10^(−Q/10)&nbsp;&nbsp;&nbsp;→&nbsp;&nbsp;&nbsp;EE = Σᵢ 10^(−Qᵢ/10)
+
+A read is discarded when its expected number of errors exceeds `maxEE`. Write that
+conversion yourself:
+
+```{webr}
+# A short stretch of quality scores from a real read
+Q <- c(38, 38, 37, 36, 32, 30, 28, 24, 20, 15)
+
+# Convert Phred score -> probability that the base is wrong.
+p_error <- ______             # <- blank: use Q in the formula 10^(-Q/10)
+
+cat("Q     :", Q, "\n")
+cat("P(err):", signif(p_error, 2), "\n")
+cat("Expected errors in these 10 bases:", round(sum(p_error), 3), "\n\n")
+
+cat("A Q38 base is wrong with probability", signif(10^(-38/10), 2), "\n")
+cat("A Q15 base is wrong with probability", signif(10^(-15/10), 2),
+    " <- one low-quality base contributes more than 100 good ones\n")
+
+say(is.numeric(p_error) && length(p_error) == length(Q) &&
+      isTRUE(all.equal(p_error, 10^(-Q/10))),
+    "correct — and notice the last line: expected errors are dominated by the few worst bases, which is why trimming the tail is so effective.",
+    "translate the formula directly: p_error <- 10^(-Q/10)")
+```
+
+## 1.4 Choosing the filtering parameters
+
+Now the real decision. We ran the filter over a grid of settings on all 18 files and
+recorded how many reads survive. Longer reads carry more information but accumulate
+more expected errors, so retention drops.
+
+```{webr}
+r <- retention[retention$sample == "CON1", ]
+
+# How does retention depend on where we truncate the 3' end?
+tab <- r[r$trimLeft == 0 & r$maxEE == 2, c("mate", "truncLen", "pct_kept")]
+print(tab[order(tab$mate, tab$truncLen), ], row.names = FALSE)
+
+# Show the whole trade-off for the reverse reads (the harder case)
+rr <- r[r$mate == 2 & r$trimLeft == 0, ]
+mat <- tapply(rr$pct_kept, list(factor(rr$truncLen), factor(rr$maxEE)), max)
+cat("\n% of reverse reads kept   (rows = truncLen, cols = maxEE)\n")
+print(mat)
+
+barplot(t(mat), beside = TRUE, ylim = c(0, 105),
+        xlab = "truncLen (3' truncation)", ylab = "% reads kept",
+        main = "CON1 reverse reads: retention vs truncation and maxEE",
+        legend.text = paste("maxEE =", colnames(mat)),
+        args.legend = list(x = "bottomright", bty = "n"))
+```
+
+```{webr}
+# Suppose you require at least 95% of the REVERSE reads to survive with maxEE = 2.
+# Read it off the table above and enter the longest truncLen that still qualifies.
+my_truncLen <- ______          # <- blank
+
+r2 <- retention[retention$sample == "CON1" & retention$mate == 2 &
+                  retention$trimLeft == 0 & retention$maxEE == 2, ]
+got <- r2$pct_kept[r2$truncLen == my_truncLen]
+cat("truncLen =", my_truncLen, "keeps", got, "% of the reverse reads\n")
+
+say(length(got) == 1 && got >= 95 &&
+      !any(r2$pct_kept[r2$truncLen > my_truncLen] >= 95),
+    paste0("right — truncating at ", my_truncLen, " keeps ", got,
+           "% while preserving as much sequence as possible. Truncating further would keep more reads but throw away real sequence you paid for."),
+    "look at the maxEE = 2 column: 150 keeps ~90%, 125 keeps ~94%, 100 keeps ~97%. Which is the LONGEST that reaches 95%?")
+```
+
+::: {.run-local}
+**Run the filter with the parameters you just chose.** Back in RStudio on ERDA:
+
+```r
+# Build the sample names (see Session 2.1 for how this line is put together)
+sample.names <- paste(sapply(strsplit(basename(fnFs), "_"), `[`, 1),
+                      sapply(strsplit(basename(fnFs), "_"), `[`, 2), sep = "_")
+
+filtFs <- file.path(path, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
+                     trimLeft   = 10,             # drop the noisy first cycles
+                     truncLen   = c(150, 125),    # forward, reverse  <- your choice
+                     maxEE      = c(2, 2),
+                     truncQ     = 2, minLen = 35, rm.phix = TRUE,
+                     compress   = TRUE, multithread = FALSE)
+out                                                # reads.in vs reads.out per sample
+```
+
+Compare the `reads.out` column with the percentages you read off the table above —
+they should agree closely.
+:::
+
+---
+
+# Session 2 — Read mapping and the count table {#sec-mapping}
+[Wednesday 23-09]{.session-chip}
+
+::: {.run-local}
+**kallisto runs in a terminal, not in R.** Open a Terminal on ERDA. You need the
+transcript FASTA and your filtered reads from Session 1.
+
+```bash
+# 1. Build the index once (takes a few minutes)
+kallisto index -i C_fructicola_GSE103878.idx GSE103878_1104.transcripts.fasta
+
+# 2. Quantify one sample (paired-end: forward file then reverse file)
+mkdir -p results
+kallisto quant -i C_fructicola_GSE103878.idx -o ./results/APP1 -t 2 \
+    APP1_SRR6041847_F_filt.fastq.gz APP1_SRR6041847_R_filt.fastq.gz
+
+# 3. Repeat for every sample. Each run writes results/<SAMPLE>/abundance.tsv
+```
+
+Useful terminal commands: `cd dirname` (enter a directory), `cd ..` (go up),
+`ls -al` (list with detail), `mkdir xx` (create), `pwd` (where am I).
+
+If your run does not finish, Absalon has the finished output:
+`abundance_files_from_kallisto.zip`.
+:::
+
+This is what kallisto produced for the nine samples — one `abundance.tsv` each,
+17,827 transcripts per file:
+
+```{webr}
+print(kal, row.names = FALSE)
+cat("\nEach abundance.tsv has one row per transcript and these columns:\n")
+cat("  target_id | length | eff_length | est_counts | tpm\n\n")
+cat("total_est_counts differs a lot between samples (sequencing depth),\n")
+cat("but total_tpm is 1e6 in every one — that is what TPM means.\n")
+```
+
+::: {.provenance}
+Look at the `file_md5` column: **CON1 and CON2 have the same checksum.** The two files
+in `abundance_files_from_kallisto.zip` are byte-identical — CON2 is a duplicate of
+CON1. This is a real error in the course material, not a trick, and §2.3 below shows
+you how to catch it. (The main count table used from Session 3 onwards is unaffected:
+its CON1 and CON2 columns are genuinely different.)
+:::
+
+## 2.1 The sample-name puzzle
+
+Before you can combine 9 output files you need 9 clean sample names. This is the
+same `paste` sequence as in the 2025 exercise — work through it and see why each
+attempt fails.
+
+```{webr}
+fnames <- c("APP1small_SRR6041847_1.fastq.gz", "APP2small_SRR6041848_1.fastq.gz",
+            "CON1small_SRR6041844_1.fastq.gz", "CON2small_SRR6041845_1.fastq.gz")
+
+# strsplit() cuts each name at every "_" and returns a LIST of pieces
+strsplit(fnames, "_")[[1]]
+
+# take the 1st and 2nd piece of each name
+part1 <- sapply(strsplit(fnames, "_"), function(x) x[1])
+part2 <- sapply(strsplit(fnames, "_"), function(x) x[2])
+part1
+part2
+
+cat("\nc()      :", c(part1, part2)[1:4], "...  <- stacks them, 8 elements. No.\n")
+cat("paste()  :", paste(part1, part2)[1],  "        <- joined with a SPACE. No.\n")
+cat("paste0() :", paste0(part1, part2)[1], "         <- no separator at all. No.\n")
+```
+
+```{webr}
+# Join the two pieces with an underscore between them.
+sample.names <- paste(part1, part2, sep = ______)     # <- blank
+
+print(sample.names)
+
+say(is.character(sample.names) && length(sample.names) == 4 &&
+      sample.names[1] == "APP1small_SRR6041847",
+    'that is it — paste(..., sep = "_") gives APP1small_SRR6041847. sapply/strsplit/paste is the standard way to turn file names into sample names.',
+    'paste() takes a sep argument: sep = "_"')
+```
+
+## 2.2 One abundance table
+
+```{webr}
+app1 <- read.csv("data/abundance/APP1_abundance.csv")
+head(app1)
+
+cat("\nrows in this file:", nrow(app1), "\n")
+cat("est_counts = estimated reads assigned to the transcript\n")
+cat("eff_length = transcript length corrected for the fragment-length distribution\n")
+cat("tpm        = transcripts per million, length- AND depth-normalised\n\n")
+
+# NOTE: to keep this page fast these files hold a 3,000-transcript subset of the
+# 17,827 kallisto reported, so their TPM does NOT sum to 1e6 — only the full file does.
+cat("TPM summed over this 3,000-transcript subset:", round(sum(app1$tpm)), "\n")
+cat("TPM summed over the full 17,827-transcript file:",
+    round(kal$total_tpm[kal$sample == "APP1"]), "  <- 1e6, as TPM must be\n")
+```
+
+## 2.3 Building the count matrix
+
+The count table is just the `est_counts` column of every sample, glued side by side
+and keyed on `target_id`.
+
+```{webr}
+samps <- c("CON1","CON2","CON3","APP1","APP2","APP3","CIH1","CIH2","CIH3")
+
+tables <- list()
+for (s in samps) {
+  tables[[s]] <- read.csv(paste0("data/abundance/", s, "_abundance.csv"))
+}
+
+# Every file lists the same transcripts in the same order, so we can take the ids once
+gene_ids <- tables[[1]]$target_id
+all_same <- all(sapply(tables, function(x) identical(x$target_id, gene_ids)))
+cat("all files in the same transcript order:", all_same, "\n")
+
+# Pull the SAME column out of each table and bind the columns together.
+count_matrix <- sapply(tables, function(x) x$______)   # <- blank
+
+rownames(count_matrix) <- gene_ids
+cat("count matrix:", nrow(count_matrix), "transcripts x", ncol(count_matrix), "samples\n\n")
+print(round(head(count_matrix, 4)))
+
+say(is.matrix(count_matrix) && ncol(count_matrix) == 9 &&
+      isTRUE(all.equal(unname(count_matrix[, "APP1"]), tables[["APP1"]]$est_counts)),
+    "correct — est_counts is the column DESeq2 needs. Building the matrix is just 'take the same column from every file'.",
+    "DESeq2 wants raw counts, not TPM. Which column is that? x$est_counts")
+```
+
+## 2.4 Check the matrix before you trust it
+
+Never hand a count matrix to DESeq2 without looking at it. The cheapest check is
+whether any two columns are identical — biological replicates never are.
+
+```{webr}
+# Correlate every sample against every other on the log scale
+cm <- cor(log2(count_matrix + 1))
+round(cm, 3)
+
+# Flag any pair of columns that is EXACTLY identical
+dup <- which(duplicated(t(count_matrix)))
+if (length(dup) > 0) {
+  for (j in dup) {
+    same <- which(apply(count_matrix, 2, function(cc) identical(cc, count_matrix[, j])))
+    cat("\n⚠  identical columns:", paste(colnames(count_matrix)[same], collapse = " == "), "\n")
+  }
+} else cat("\nno duplicated columns\n")
+```
+
+`CON1` and `CON2` come out identical, with a correlation of exactly 1. Two biological
+replicates cannot be identical to the last decimal, so this is a file-handling
+mistake, not biology — the same file was copied twice when the archive was made. Had
+you run DESeq2 on this matrix it would have reported an impossibly small within-group
+variance for CON and inflated your significance. **This is why you look first.**
+
+## 2.5 Why DESeq2 wants counts, not TPM
+
+```{webr}
+tpm_matrix <- sapply(tables, function(x) x$tpm)
+rownames(tpm_matrix) <- gene_ids
+
+cat("Column sums of est_counts — sequencing depth differs a lot between samples:\n")
+print(round(colSums(count_matrix)))
+cat("\nOver the FULL transcriptome, TPM is normalised to 1e6 in every sample:\n")
+print(setNames(round(kal$total_tpm), kal$sample))
+```
+
+TPM has already had library size divided out, so every sample sums to the same total.
+That is convenient for eyeballing expression, but it destroys the information DESeq2
+needs: **how many reads** a measurement is based on. A gene at 50 TPM in a 40-million
+read sample is far more reliable than the same 50 TPM in a 2-million read sample, and
+only the raw counts still know the difference. That is why the next session starts
+from `est_counts`.
+
+---
+
+# Session 3 — Differential expression {#sec-de}
+[Monday 28-09]{.session-chip}
+
+From here on we use the **full** count matrix — all 12 samples including the infected
+leaf (IL), all 17,827 genes, mapped with Bowtie2 and counted with HTSeq as described
+in Liang et al. 2018.
+
+```{webr}
+dim(CNT)
+CNT[1:4, 1:6]
+data.frame(sample = samples, condition = condition)
+```
+
+## 3.1 Library size
+
+```{webr}
+depth <- colSums(CNT)
+
+barplot(depth / 1e6, col = cond_col[condition], las = 2,
+        ylab = "Million mapped reads", main = "Library size per sample")
+legend("topright", names(cond_col), fill = cond_col, bty = "n")
+
+print(data.frame(sample = samples, condition = condition,
+                 million_reads = round(depth / 1e6, 2)), row.names = FALSE)
+```
+
+The three IL samples are dramatically smaller. Hold that thought — §3.3 explains it.
+
+## 3.2 Estimate the size factors yourself
+
+This is the single most useful thing to understand about DESeq2, and it is five lines
+of base R. DESeq2 does **not** normalise by total reads (one runaway gene would drag
+every other gene down). It uses the **median-of-ratios**:
+
+1. for each gene, compute its geometric mean across all samples — a synthetic
+   "reference sample";
+2. for each sample, divide every gene by that reference;
+3. the sample's size factor is the **median** of those ratios.
+
+Because it is a median, a handful of extreme genes cannot move it.
+
+```{webr}
+log_cnt <- log(CNT)                     # log of every count; zeros become -Inf
+ref     <- rowMeans(log_cnt)            # log geometric mean per gene
+keep    <- is.finite(ref)               # drop genes with a zero in ANY sample
+cat("genes usable as reference:", sum(keep), "of", nrow(CNT), "\n")
+
+ratios <- log_cnt[keep, ] - ref[keep]   # log ratio of each sample to the reference
+
+# Take the summary statistic that makes this robust to outliers.
+my_sf <- exp(apply(ratios, 2, ______))  # <- blank
+
+comparison <- data.frame(sample = samples,
+                         mine   = round(my_sf, 4),
+                         deseq2 = sf_deseq$size_factor[match(samples, sf_deseq$sample)])
+print(comparison, row.names = FALSE)
+
+say(isTRUE(all.equal(unname(round(my_sf, 3)),
+                     unname(round(sf_deseq$size_factor[match(samples, sf_deseq$sample)], 3)))),
+    "your size factors match DESeq2's to three decimals. You have just reimplemented estimateSizeFactors() in five lines of base R.",
+    "the whole point is robustness to outliers - use median, not mean.")
+```
+
+```{webr}
+# Normalise and see what changed
+NORM <- sweep(CNT, 2, my_sf, "/")
+
+par(mfrow = c(1, 2))
+boxplot(log2(CNT + 1), col = cond_col[condition], las = 2, outline = FALSE,
+        main = "Raw counts", ylab = "log2(count + 1)")
+boxplot(log2(NORM + 1), col = cond_col[condition], las = 2, outline = FALSE,
+        main = "Size-factor normalised", ylab = "log2(normalised + 1)")
+par(mfrow = c(1, 1))
+```
+
+## 3.3 Why are the IL samples so different?
+
+```{webr}
+print(data.frame(sample = samples, condition = condition,
+                 million_reads = round(depth / 1e6, 2),
+                 size_factor   = round(my_sf, 3)), row.names = FALSE)
+
+cat("\nmean size factor by condition:\n")
+print(round(tapply(my_sf, condition, mean), 3))
+```
+
+The IL size factors are roughly **0.10–0.27** against ~2.5 for APP: an order of
+magnitude. The reason is biological, not technical. IL is RNA extracted from an
+*infected apple leaf*, so most of the RNA in the tube is **apple**, not fungus. Only
+a small fraction of the reads map to the *C. fructicola* transcriptome, so the fungal
+library is effectively tiny. This is exactly what size factors are for — but it also
+means IL carries much less statistical power, and comparisons involving it should be
+read with that in mind.
+
+## 3.4 Variance stabilisation
+
+Raw RNAseq counts are heteroscedastic: highly expressed genes vary more in absolute
+terms, so a plain log transform leaves low-count genes looking noisiest. `vst()`
+corrects this. Compare the mean–SD relationship before and after.
+
+```{webr}
+sub  <- CNT[rowSums(CNT) >= 10, ]         # the genes DESeq2 kept
+lsub <- log2(sub + 1)
+
+m_log <- rowMeans(lsub);      s_log <- apply(lsub, 1, sd)
+m_vst <- rowMeans(VST);       s_vst <- apply(VST,  1, sd)
+
+par(mfrow = c(1, 2))
+plot(m_log, s_log, pch = 20, cex = 0.3, col = adjustcolor("grey30", 0.25),
+     xlab = "mean log2(count + 1)", ylab = "standard deviation",
+     main = "log2(count + 1)", ylim = c(0, 4))
+lines(lowess(m_log, s_log), col = "red", lwd = 2.5)
+plot(m_vst, s_vst, pch = 20, cex = 0.3, col = adjustcolor("grey30", 0.25),
+     xlab = "mean VST value", ylab = "standard deviation",
+     main = "vst()", ylim = c(0, 4))
+lines(lowess(m_vst, s_vst), col = "red", lwd = 2.5)
+par(mfrow = c(1, 1))
+```
+
+A perfect transformation gives a **flat** red line — SD independent of mean. The VST
+panel is much flatter, which is why PCA and clustering are run on VST values and never
+on raw counts.
+
+## 3.5 Principal component analysis
+
+```{webr}
+# prcomp expects SAMPLES in rows, so transpose. Use the most variable genes.
+v   <- apply(VST, 1, var)
+top <- names(sort(v, decreasing = TRUE))[1:500]
+
+# Which matrix should PCA use — the raw counts or the variance-stabilised values?
+pca <- prcomp(t(______[top, ]), scale. = FALSE)     # <- blank
+
+pct <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
+
+plot(pca$x[, 1], pca$x[, 2], pch = 19, cex = 2.4, col = cond_col[condition],
+     xlab = paste0("PC1 (", pct[1], "%)"), ylab = paste0("PC2 (", pct[2], "%)"),
+     main = "PCA of the 500 most variable genes")
+text(pca$x[, 1], pca$x[, 2], samples, pos = 3, cex = 0.75)
+abline(h = 0, v = 0, lty = 3, col = "grey60")
+
+cat("Variance explained by each PC (%):", pct[1:6], "\n")
+cat("PC1 + PC2 =", pct[1] + pct[2], "% — the rest is spread over PC3..PC11\n")
+
+say(exists("pca") && isTRUE(all.equal(unname(pca$sdev[1]),
+      unname(prcomp(t(VST[top, ]), scale. = FALSE)$sdev[1]))),
+    "correct — PCA on VST values. Replicates group together and the four growth forms separate, which is what you want to see before trusting any differential expression result.",
+    "PCA must run on variance-stabilised data, not raw counts: use VST.")
+```
+
+The percentages do not add to 100 because there are 11 more components; PC1 and PC2
+are simply the two directions capturing the most variance.
+
+## 3.6 Sample-to-sample distances
+
+```{webr}
+d   <- dist(t(VST[top, ]))          # Euclidean distance between samples
+dm  <- as.matrix(d)
+ord <- hclust(d)$order
+
+image(1:12, 1:12, dm[ord, ord], axes = FALSE, xlab = "", ylab = "",
+      col = hcl.colors(32, "Blues", rev = TRUE),
+      main = "Euclidean distance between samples (VST)")
+axis(1, 1:12, samples[ord], las = 2, cex.axis = 0.75)
+axis(2, 1:12, samples[ord], las = 2, cex.axis = 0.75)
+
+plot(hclust(d), labels = samples, main = "Sample clustering", xlab = "", sub = "")
+```
+
+::: {.run-local}
+**The DESeq2 workflow itself.** Everything above prepared you to read its output;
+this is how you produce it. Files from Absalon: `C_fructicola_counts.zip`
+(`GSE103878_1104.genes.count.txt` and `GSE103878_1104_genes_annot.tab`).
+
+```r
+library(DESeq2)
+
+countdata <- read.delim("GSE103878_1104.genes.count.txt", row.names = 1)
+coldata   <- data.frame(
+  row.names = colnames(countdata),
+  condition = factor(sub("[0-9]+$", "", colnames(countdata)))
+)
+
+dds <- DESeqDataSetFromMatrix(countData = countdata,
+                              colData   = coldata,
+                              design    = ~ condition)
+
+dds <- dds[rowSums(counts(dds)) >= 10, ]      # the prefilter from §3.4
+dds <- DESeq(dds)                             # size factors + dispersions + Wald test
+
+sizeFactors(dds)                              # compare with your §3.2 values
+vsd <- vst(dds, blind = FALSE)                # the VST matrix used above
+plotPCA(vsd, intgroup = "condition")
+plotDispEsts(dds)
+
+res <- results(dds, contrast = c("condition", "APP", "CON"), alpha = 0.05)
+summary(res)
+plotMA(res)
+
+# annotate and export
+annot <- read.delim("GSE103878_1104_genes_annot.tab")
+out   <- merge(as.data.frame(res), annot, by.x = "row.names", by.y = "ID", all.x = TRUE)
+head(out[order(out$padj), ], 10)
+```
+
+The `res` object this produces is the table loaded as `de` in the cells below — so
+your local run and this page should agree.
+:::
+
+## 3.7 Reading the results table
+
+```{webr}
+str(de)
+head(de[order(de$padj), c("gene", "baseMean", "log2FoldChange", "padj", "annotation")], 8)
+
+cat("\ngenes tested :", nrow(de), "\n")
+cat("padj < 0.05  :", sum(de$padj < 0.05, na.rm = TRUE), "\n")
+cat("  up in APP  :", sum(de$padj < 0.05 & de$log2FoldChange > 0, na.rm = TRUE), "\n")
+cat("  down in APP:", sum(de$padj < 0.05 & de$log2FoldChange < 0, na.rm = TRUE), "\n")
+cat("NA padj      :", sum(is.na(de$padj)), " (filtered out by independent filtering)\n")
+```
+
+## 3.8 MA plot and volcano plot
+
+```{webr}
+sig <- !is.na(de$padj) & de$padj < 0.05
+
+par(mfrow = c(1, 2))
+# MA: mean expression vs fold change
+plot(de$baseMean, de$log2FoldChange, log = "x", pch = 20, cex = 0.35,
+     col = ifelse(sig, adjustcolor("#C44E52", 0.55), adjustcolor("grey40", 0.35)),
+     xlab = "mean of normalised counts", ylab = "log2 fold change (APP / CON)",
+     main = "MA plot", ylim = c(-12, 12))
+abline(h = 0, col = "blue", lwd = 1.5)
+
+# Volcano: fold change vs significance
+plot(de$log2FoldChange, -log10(de$pvalue), pch = 20, cex = 0.35,
+     col = ifelse(sig, adjustcolor("#C44E52", 0.55), adjustcolor("grey40", 0.35)),
+     xlab = "log2 fold change (APP / CON)", ylab = "-log10(p-value)",
+     main = "Volcano plot", xlim = c(-12, 12))
+abline(v = c(-1, 1), lty = 2, col = "grey40")
+par(mfrow = c(1, 1))
+```
+
+Low-expression genes fan out on the left of the MA plot: with few reads the fold
+change is poorly determined, which is exactly why the `rowSums >= 10` prefilter and
+DESeq2's independent filtering exist.
+
+```{webr}
+# The 10 most strongly up-regulated genes in appressoria, with their function
+up <- de[sig & de$log2FoldChange > 0, ]
+up <- up[order(-up$log2FoldChange), ]
+print(head(up[, c("gene", "log2FoldChange", "padj", "annotation")], 10), row.names = FALSE)
+```
+
+Most of the extreme fold changes belong to hypothetical proteins — normal for a fungal
+genome, and a reminder that a big log2FC is not the same as an interpretable result.
+
+## 3.9 Comparing two contrasts
+
+`de_cih` holds the same analysis for **CIH vs CON**. Comparing two contrasts separates
+genes specific to appressoria from the general infection programme.
+
+```{webr}
+m <- merge(de[,     c("gene", "log2FoldChange", "padj")],
+           de_cih[, c("gene", "log2FoldChange", "padj")],
+           by = "gene", suffixes = c("_APP", "_CIH"))
+m <- m[!is.na(m$padj_APP) & !is.na(m$padj_CIH), ]
+
+plot(m$log2FoldChange_APP, m$log2FoldChange_CIH, pch = 20, cex = 0.3,
+     col = adjustcolor("grey30", 0.3),
+     xlab = "log2FC  APP vs CON", ylab = "log2FC  CIH vs CON",
+     main = "Appressoria and infectious hyphae share much of their response")
+abline(0, 1, col = "blue", lty = 2); abline(h = 0, v = 0, col = "grey60", lty = 3)
+
+cat("correlation of the two contrasts:",
+    round(cor(m$log2FoldChange_APP, m$log2FoldChange_CIH), 3), "\n\n")
+
+app_only <- m$gene[m$padj_APP < 0.05 & m$log2FoldChange_APP >  2 &
+                   (m$padj_CIH >= 0.05 | abs(m$log2FoldChange_CIH) < 1)]
+cat("up in APP but NOT in CIH:", length(app_only), "genes\n")
+print(head(data.frame(gene = app_only, annotation = ann[app_only]), 6), row.names = FALSE)
+```
+
+## 3.10 Multiple testing
+
+14,099 tests at p < 0.05 would give ~700 false positives by chance alone. That is
+what the adjusted p-value fixes.
+
+```{webr}
+p <- de$pvalue[!is.na(de$pvalue)]
+
+bonf <- p.adjust(p, method = "bonferroni")
+# Benjamini-Hochberg controls the false discovery rate. Enter its method name:
+bh   <- p.adjust(p, method = ______)          # <- blank
+
+cat("raw p < 0.05          :", sum(p    < 0.05), "\n")
+cat("Bonferroni-adjusted   :", sum(bonf < 0.05), "\n")
+cat("BH-adjusted (FDR)     :", sum(bh   < 0.05), "\n\n")
+cat("expected false positives among the raw hits:", round(0.05 * length(p)), "\n")
+
+say(isTRUE(all.equal(bh, p.adjust(p, method = "BH"))),
+    'correct. Bonferroni controls the probability of even ONE false positive and is very conservative; BH controls the FRACTION of false positives among the genes you call significant (the FDR) — the right trade-off when you are screening thousands of genes. padj in a DESeq2 table is BH.',
+    'the method string is "BH" (or equivalently "fdr").')
+```
+
+---
+
+# Session 4 — Enrichment and clustering {#sec-enrich}
+[Wednesday 30-09]{.session-chip}
+
+You now have thousands of significant genes, which is not an answer to a biological
+question. Enrichment analysis turns that list into statements about **function**.
+
+Everything in this session runs here — Fisher's exact test, the hypergeometric
+distribution, `hclust` and `kmeans` are all base R.
+
+## 4.1 Defining the gene list
+
+Enrichment starts with a decision most papers gloss over: what counts as
+"differentially expressed"?
+
+```{webr}
+universe <- de$gene[!is.na(de$padj)]              # every gene actually tested
+cat("universe (tested genes):", length(universe), "\n\n")
+
+for (lfc in c(0, 1, 2, 3)) {
+  n <- sum(de$padj < 0.05 & abs(de$log2FoldChange) > lfc, na.rm = TRUE)
+  cat(sprintf("padj < 0.05 and |log2FC| > %d : %5d genes\n", lfc, n))
+}
+
+# We use a strict list so the enrichment is specific rather than "everything".
+de_genes <- de$gene[!is.na(de$padj) & de$padj < 0.05 & de$log2FoldChange > 2]
+cat("\nUp in APP with log2FC > 2:", length(de_genes), "genes\n")
+```
+
+## 4.2 The gene sets
+
+```{webr}
+head(gene_sets, 3)
+
+sizes <- table(gene_sets$term_name)
+cat(length(sizes), "functional categories\n\n")
+print(sort(sizes, decreasing = TRUE))
+```
+
+::: {.provenance}
+These categories were built by matching keywords against the annotation text — every
+gene whose description contains `cytochrome p450`, and so on. They are real
+annotations grouped by a simple rule, **not** curated GO or PFAM terms, so treat the
+biology below as an exercise rather than a published result. The statistics are
+identical to the real thing.
+:::
+
+## 4.3 The hypergeometric test, by hand
+
+The lecture's question — *is the overlap larger than expected by random sampling?* —
+is answered by the hypergeometric distribution. Four numbers define it:
+
+| symbol | meaning |
+|---|---|
+| `k` | genes in your DE list that are in the set (the **overlap**) |
+| `K` | genes in the set, in the whole universe |
+| `N` | size of the universe |
+| `n` | size of your DE list |
+
+```{webr}
+set_name <- "Cytochrome P450"
+set_genes <- gene_sets$gene[gene_sets$term_name == set_name]
+
+N <- length(universe)                                  # universe
+n <- length(de_genes)                                  # DE list
+K <- sum(set_genes %in% universe)                      # set, restricted to universe
+k <- sum(de_genes %in% set_genes)                      # overlap
+
+cat(set_name, "\n")
+cat("  N (universe)     :", N, "\n")
+cat("  n (DE list)      :", n, "\n")
+cat("  K (in set)       :", K, "\n")
+cat("  k (overlap)      :", k, "\n")
+cat("  expected overlap :", round(n * K / N, 2), "\n")
+cat("  fold enrichment  :", round(k / (n * K / N), 2), "\n")
+# fold ~ 1 means the overlap is exactly what chance predicts — no enrichment.
+
+# P(X >= k) — the probability of an overlap AT LEAST this large by chance.
+# phyper(q, m, n, k) is P(X <= q), so we ask for the upper tail at k - 1.
+p_enrich <- phyper(______, K, N - K, n, lower.tail = FALSE)   # <- blank
+
+cat("\n  p-value          :", signif(p_enrich, 3), "\n")
+
+say(isTRUE(all.equal(p_enrich, phyper(k - 1, K, N - K, n, lower.tail = FALSE))),
+    "correct — the upper tail must start at k-1 so that the observed overlap k is itself included in 'at least k'. Using k instead is an off-by-one error that silently makes every p-value too small.",
+    "you want P(X >= k). Since phyper(q, ...) with lower.tail = FALSE gives P(X > q), you must pass k - 1.")
+```
+
+```{webr}
+# fisher.test on the 2x2 table gives the identical p-value
+tab <- matrix(c(k,          n - k,
+                K - k,      N - n - (K - k)), nrow = 2,
+              dimnames = list(c("in set", "not in set"), c("in DE list", "not in DE list")))
+print(tab)
+
+cat("\nphyper      :", signif(phyper(k - 1, K, N - K, n, lower.tail = FALSE), 4), "\n")
+cat("fisher.test :", signif(fisher.test(tab, alternative = "greater")$p.value, 4), "\n")
+```
+
+Fisher's exact test and the hypergeometric upper tail are the same calculation — that
+is the point the lecture makes when it says Fisher's test "is based on a theoretical
+null-hypothesis distribution (hypergeometric)".
+
+## 4.4 Does your code actually work? Use a positive control
+
+Cytochrome P450 came out at fold ≈ 1 — no enrichment at all. Before concluding
+anything biological you must rule out the other explanation: **that your code is
+wrong.** The way to do that is a positive control — a gene list you *know* is
+enriched, built on purpose.
+
+```{webr}
+set.seed(1)
+p450 <- intersect(gene_sets$gene[gene_sets$term_name == "Cytochrome P450"], universe)
+
+# A fake "DE list": 60 real P450 genes + 240 genes drawn at random.
+fake_list <- c(sample(p450, 60),
+               sample(setdiff(universe, p450), 240))
+
+nf <- length(fake_list)
+Kf <- length(p450)
+kf <- sum(fake_list %in% p450)
+
+cat("planted 60 P450 genes into a list of", nf, "\n")
+cat("  expected overlap by chance :", round(nf * Kf / N, 2), "\n")
+cat("  observed overlap           :", kf, "\n")
+cat("  fold enrichment            :", round(kf / (nf * Kf / N), 1), "\n")
+cat("  p-value                    :",
+    signif(phyper(kf - 1, Kf, N - Kf, nf, lower.tail = FALSE), 3), "\n")
+```
+
+The test finds it with an astronomically small p-value. **The machinery works.** So
+when the real data gives nothing, that is a statement about the data, not a bug.
+
+## 4.5 Testing every category
+
+```{webr}
+terms  <- unique(gene_sets$term_name)
+N_univ <- length(universe)     # recomputed here so this cell stands on its own
+n_de   <- length(de_genes)
+
+res <- data.frame()
+for (tm in terms) {
+  sg <- gene_sets$gene[gene_sets$term_name == tm]
+  K  <- sum(sg %in% universe)
+  k  <- sum(de_genes %in% sg)
+  if (K < 5) next
+  res <- rbind(res, data.frame(
+    term      = tm,
+    set_size  = K,
+    overlap   = k,
+    expected  = round(n_de * K / N_univ, 2),
+    fold      = round(k / (n_de * K / N_univ), 2),
+    pvalue    = phyper(k - 1, K, N_univ - K, n_de, lower.tail = FALSE)
+  ))
+}
+
+# Same multiple-testing problem as in §3.9 — one test per category.
+res$padj <- p.adjust(res$pvalue, method = "BH")
+res <- res[order(res$pvalue), ]
+
+print(head(res, 12), row.names = FALSE)
+cat("\ncategories with raw p < 0.05 :", sum(res$pvalue < 0.05), "of", nrow(res), "\n")
+cat("categories with padj < 0.05  :", sum(res$padj  < 0.05), "of", nrow(res), "\n")
+```
+
+```{webr}
+# Fold enrichment for every category, ranked. Nothing is far from 1.
+o <- order(res$fold)
+par(mar = c(5, 18, 4, 2))
+barplot(res$fold[o], horiz = TRUE, names.arg = res$term[o], las = 1, cex.names = 0.7,
+        col = ifelse(res$padj[o] < 0.05, "#C44E52", "#9aa7b4"),
+        xlab = "Fold enrichment (1 = exactly what chance predicts)",
+        xlim = c(0, 2), main = "Up in appressoria: all 29 categories")
+abline(v = 1, lty = 2, lwd = 2)
+par(mar = c(5, 4, 4, 2))
+```
+
+## 4.6 Nothing is significant. Why?
+
+This is the most common outcome of a first real enrichment analysis, and being able
+to diagnose it is worth more than a lucky hit. Four things are working against us
+here, and you can check each one:
+
+```{webr}
+cat("1. The gene list is enormous.\n")
+cat("   ", n, "of", N, "tested genes =", round(100 * n / N, 1),
+    "% of the genome is on the list.\n")
+cat("    A list that big overlaps every category at roughly the background rate,\n")
+cat("    so no category can stand out. Enrichment needs a SELECTIVE list.\n\n")
+
+cat("2. The categories are protein families, not biological processes.\n")
+cat("    'Protein kinase' (", sum(gene_sets$term_name == "Protein kinase"),
+    " genes) is scattered across every pathway in the cell.\n", sep = "")
+cat("    Real GO terms describe processes that are switched on together;\n")
+cat("    a family like 'kinase' has no reason to move as a block.\n\n")
+
+cat("3. Only", nrow(res), "categories were tested, but BH still costs us.\n")
+best <- res[which.min(res$pvalue), ]
+cat("    best raw p =", signif(best$pvalue, 3), "->  padj =", signif(best$padj, 3),
+    "  (", best$term, ")\n\n")
+
+cat("4. Most of the genome has no usable annotation.\n")
+cat("   ", sum(!(universe %in% gene_sets$gene)), "of", N,
+    "tested genes are in no category at all\n")
+cat("    (mostly 'hypothetical protein') — they can never contribute a hit.\n")
+```
+
+None of this means the appressoria have no biology. It means **this gene list against
+these categories** cannot detect it. The fixes a real analysis would use are: a
+selective list (top few hundred genes, or a cluster — §4.7), curated GO/PFAM
+annotation instead of keyword families, and a whole-distribution method that needs no
+threshold at all (§4.8).
+
+::: {.provenance}
+It would have been easy to make this page produce an impressive enrichment table by
+hunting for a category and threshold that happened to pass. That is p-hacking, and it
+is the single most common way enrichment analysis is abused in the literature. The
+result above is what this data honestly gives.
+:::
+
+## 4.7 Clustering expression profiles
+
+Enrichment on one gene list answers one question. Clustering first, then testing each
+cluster, tells you *which programmes* the fungus runs in *which* growth form — the
+analysis on the last slide of the lecture.
+
+```{webr}
+# Average the VST values within each condition -> one profile per growth form
+conds <- c("CON", "APP", "CIH", "IL")
+prof  <- sapply(conds, function(cd) rowMeans(VST[, condition == cd, drop = FALSE]))
+
+# Focus on genes that actually change, and scale each gene to shape, not level
+vary  <- names(sort(apply(prof, 1, var), decreasing = TRUE))[1:1500]
+scaled <- t(scale(t(prof[vary, ])))
+
+set.seed(42)
+km <- kmeans(scaled, centers = 4, nstart = 25)
+cat("cluster sizes:", table(km$cluster), "\n")
+
+par(mfrow = c(2, 2))
+for (i in 1:4) {
+  members <- scaled[km$cluster == i, ]
+  matplot(t(members[1:min(120, nrow(members)), ]), type = "l", lty = 1,
+          col = adjustcolor("grey50", 0.25), xaxt = "n",
+          xlab = "", ylab = "scaled expression",
+          main = paste0("Cluster ", i, "  (n = ", sum(km$cluster == i), ")"))
+  lines(km$centers[i, ], col = "#C44E52", lwd = 3)
+  axis(1, 1:4, conds)
+}
+par(mfrow = c(1, 1))
+```
+
+```{webr}
+# Which functions are enriched in each cluster?
+enrich_cluster <- function(genes_in_cluster, univ) {
+  Nn <- length(univ); nn <- length(genes_in_cluster)
+  out <- data.frame()
+  for (tm in unique(gene_sets$term_name)) {
+    sg <- gene_sets$gene[gene_sets$term_name == tm]
+    K  <- sum(sg %in% univ); k <- sum(genes_in_cluster %in% sg)
+    if (K < 5 || k == 0) next
+    out <- rbind(out, data.frame(term = tm, overlap = k, set_size = K,
+                                 fold = round(k / (nn * K / Nn), 2),
+                                 pvalue = phyper(k - 1, K, Nn - K, nn, lower.tail = FALSE)))
+  }
+  out$padj <- p.adjust(out$pvalue, method = "BH")
+  out[order(out$pvalue), ]
+}
+
+for (i in 1:4) {
+  cl <- rownames(scaled)[km$cluster == i]
+  e  <- enrich_cluster(cl, vary)
+  peak <- conds[which.max(km$centers[i, ])]
+  cat(sprintf("\n=== Cluster %d (n = %d genes, highest in %s) ===\n",
+              i, length(cl), peak))
+  print(head(e[, c("term", "overlap", "set_size", "fold", "pvalue", "padj")], 3),
+        row.names = FALSE)
+  cat("  significant after BH:", sum(e$padj < 0.05), "\n")
+}
+```
+
+A cluster is a much more coherent list than "everything with padj < 0.05" — these
+genes were selected *because* they share an expression profile — and the fold
+enrichments do rise. Some categories reach raw p ≈ 0.015, which is suggestive: the
+CON-peaking cluster leans towards cytochrome P450 and heterokaryon-incompatibility
+genes. But none survives correction, so the honest way to report this is as a
+hypothesis to test, never as a finding.
+
+## 4.8 How much does the threshold matter?
+
+The lecture's argument for whole-distribution methods like GSEA is that
+threshold-based tests give different answers at different cut-offs. Test that claim.
+
+```{webr}
+Nu <- length(universe)
+
+for (lfc in c(1, 2, 3)) {
+  dg <- de$gene[!is.na(de$padj) & de$padj < 0.05 & de$log2FoldChange > lfc]
+  nn <- length(dg)
+  out <- data.frame()
+  for (tm in unique(gene_sets$term_name)) {
+    sg <- gene_sets$gene[gene_sets$term_name == tm]
+    K  <- sum(sg %in% universe); k <- sum(dg %in% sg)
+    if (K < 5) next
+    out <- rbind(out, data.frame(term = tm,
+                 p = phyper(k - 1, K, Nu - K, nn, lower.tail = FALSE)))
+  }
+  out$padj <- p.adjust(out$p, method = "BH")
+  out <- out[order(out$p), ]
+  cat(sprintf("\nlog2FC > %d  (%d genes)  -> %d significant after BH, best raw p = %.3f\n",
+              lfc, nn, sum(out$padj < 0.05), min(out$p)))
+  cat("   top 3 by raw p:", paste(head(out$term, 3), collapse = " | "), "\n")
+}
+```
+
+The ranking reshuffles as the threshold moves — a different cut-off would have given
+you a different "top hit" to write about. Nothing is wrong with any single run; the
+point is that the threshold is a **choice you are making**, and it belongs in your
+methods section.
+
+This is exactly the argument the lecture makes for **whole-distribution methods**:
+there is no natural value for the cut-off, different settings give different results,
+and thresholding throws away the difference between a strong and a weak signal. GSEA
+avoids the problem by ranking *every* gene and asking where a set's members fall in
+that ranking, rather than cutting the list in two. It needs packages that webR cannot
+load (`fgsea`, `clusterProfiler`), so it belongs in the local block below.
+
+::: {.run-local}
+**Real enrichment analysis, in RStudio.** With curated annotation and a proper tool:
+
+```r
+# Over-representation (what you did by hand above), with real GO terms
+library(clusterProfiler)
+ego <- enrichGO(gene = de_gene_ids, universe = all_gene_ids,
+                OrgDb = org.Xx.eg.db, ont = "BP",
+                pAdjustMethod = "BH", qvalueCutoff = 0.05)
+dotplot(ego, showCategory = 20)
+
+# GSEA — no threshold: rank every gene by the DESeq2 statistic
+library(fgsea)
+ranks <- setNames(res$stat, rownames(res))       # or -log10(pvalue) * sign(log2FC)
+fg <- fgsea(pathways = gene_set_list, stats = ranks, minSize = 10, maxSize = 500)
+head(fg[order(fg$padj), ])
+plotEnrichment(gene_set_list[["GO:0006979"]], ranks)   # the running ES score
+```
+
+For a genome without an OrgDb — like *C. fructicola* — you would get GO or PFAM terms
+from InterProScan or eggNOG-mapper output and pass them to `fgsea` as a named list.
+:::
+
+---
+
+# Session 5 — Group assignment {#sec-assignment}
+[Monday 05-10 · hand-in 15:00]{.session-chip}
+
+::: {.run-local}
+**The 2nd group assignment is a written report and must be done in RStudio.** It uses
+a different organism — *Coccidioides posadasii*, the fungus causing Valley Fever — and
+asks about the transcription factor Ryp1 and spherule formation.
+
+Files on Absalon (Module 2 → Group Work):
+
+::: {.filelist}
+GroupAssignment2025.html &nbsp;&nbsp;— the questions<br>
+CountTable_GroupExercise2025.csv &nbsp;&nbsp;— counts, 4 conditions x 2 replicates<br>
+Annot_GroupExercise2025.csv &nbsp;&nbsp;— gene annotations
+:::
+
+Note both CSVs are **semicolon**-separated:
+
+```r
+counts <- read.csv2("CountTable_GroupExercise2025.csv", row.names = 1)
+annot  <- read.csv2("Annot_GroupExercise2025.csv")
+```
+
+You hand in an **Rmarkdown document** with every group member's name at the top,
+covering: a PCA of rlog values and a heatmap of VST sample distances; the prefilter
+and DESeq2 run with dispersion plot and size factors; genes up in WT spherules vs WT
+hyphae; and the expression of the virulence factor **SOWgp** across all four
+conditions.
+:::
+
+Everything you need for it you have already done on this page — only the organism
+changes:
+
+| Assignment asks for | Practise it in |
+|---|---|
+| PCA of transformed values | [§3.5](#sec-de) |
+| Heatmap of sample distances | [§3.6](#sec-de) |
+| Prefilter + DESeq2 run | [§3.2](#sec-de), the local block in [§3.6](#sec-de) |
+| Size factors, smallest library | [§3.2](#sec-de), [§3.3](#sec-de) |
+| Genes up in one condition | [§3.7](#sec-de), [§3.8](#sec-de) |
+| Expression of one named gene | below |
+
+```{webr}
+# Plot the normalised counts of a single gene across all conditions —
+# the last question of the assignment, done here on the C. fructicola data.
+NORM <- sweep(CNT, 2, sf_deseq$size_factor[match(samples, sf_deseq$sample)], "/")
+
+# the most strongly up-regulated gene in appressoria
+sig_de   <- de[!is.na(de$padj) & de$padj < 0.05, ]
+top_gene <- sig_de$gene[which.max(sig_de$log2FoldChange)]
+
+# +1 so that genes switched completely off in a condition still plot on a log axis
+vals <- NORM[top_gene, ] + 1
+stripchart(vals ~ factor(condition, levels = c("CON", "APP", "CIH", "IL")),
+           vertical = TRUE, pch = 19, cex = 1.6, method = "jitter",
+           col = cond_col[c("CON", "APP", "CIH", "IL")], log = "y",
+           ylab = "normalised count + 1", xlab = "",
+           main = paste("Gene", top_gene))
+mtext(ann[[top_gene]], side = 3, line = 0.2, cex = 0.85)
+
+cat("gene              :", top_gene, "\n")
+cat("annotation        :", ann[[top_gene]], "\n")
+cat("log2FC APP vs CON :", round(sig_de$log2FoldChange[sig_de$gene == top_gene], 2), "\n")
+cat("normalised counts :\n")
+print(round(NORM[top_gene, ], 1))
+```
+
+---
+
+# Where to go next
+
+- The **lecture slides and the four papers** are on Absalon — this page does not
+  replace them. Conesa et al. 2016 is the required reading for Session 1, and the
+  DESeq2 workflow vignette for Session 3.
+- Your work in this page is saved in your browser automatically; use the save/restore
+  control to keep it between sessions. Nothing you type here is sent anywhere.
+- If a cell gets into a broken state, reload the page — the setup cell re-runs and the
+  data is reloaded from scratch.

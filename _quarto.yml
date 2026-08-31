@@ -1,0 +1,9 @@
+project:
+  type: website
+  output-dir: _site
+  resources:
+    - data
+
+website:
+  title: "Big Data — Module 2: Transcriptomics"
+  page-navigation: true

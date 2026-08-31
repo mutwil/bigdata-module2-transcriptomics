@@ -1,0 +1,129 @@
+/* ------------------------------------------------------------------
+   Module 2 hybrid lesson: visual separation of the two kinds of work.
+   .runs-here  = executes in the browser (webR)
+   .run-local  = must be run in RStudio on ERDA / your own machine
+   ------------------------------------------------------------------ */
+
+:root {
+  --local-accent: #1f6feb;
+  --local-bg: #eef4fd;
+  --local-bg-dark: #10203a;
+  --browser-accent: #2f7d4f;
+  --browser-bg: #eef7f1;
+  --browser-bg-dark: #0f2418;
+  --warn-accent: #b8860b;
+  --warn-bg: #fdf6e3;
+  --warn-bg-dark: #2c2410;
+}
+
+/* ---------- "run this locally" block ---------- */
+.run-local {
+  border: 1px solid rgba(31, 111, 235, 0.35);
+  border-left: 5px solid var(--local-accent);
+  background: var(--local-bg);
+  border-radius: 6px;
+  padding: 0.9em 1.1em 0.6em;
+  margin: 1.4em 0;
+}
+
+.run-local > p:first-child { margin-top: 0; }
+.run-local > :last-child { margin-bottom: 0.4em; }
+
+.run-local::before {
+  content: "🖥️  RUN THIS LOCALLY — RStudio on ERDA (not in this page)";
+  display: block;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  color: var(--local-accent);
+  margin-bottom: 0.6em;
+}
+
+/* Code inside a local block is reference material, not editable — make that read. */
+.run-local pre {
+  background: #ffffff;
+  border: 1px solid rgba(31, 111, 235, 0.25);
+  border-radius: 4px;
+}
+
+/* ---------- "runs here" marker ---------- */
+.runs-here {
+  border: 1px solid rgba(47, 125, 79, 0.35);
+  border-left: 5px solid var(--browser-accent);
+  background: var(--browser-bg);
+  border-radius: 6px;
+  padding: 0.9em 1.1em 0.6em;
+  margin: 1.4em 0;
+}
+
+.runs-here > p:first-child { margin-top: 0; }
+.runs-here > :last-child { margin-bottom: 0.4em; }
+
+.runs-here::before {
+  content: "▶  RUNS HERE — edit the code and press Run";
+  display: block;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  color: var(--browser-accent);
+  margin-bottom: 0.6em;
+}
+
+/* ---------- data-provenance / caveat note ---------- */
+.provenance {
+  border: 1px solid rgba(184, 134, 11, 0.4);
+  border-left: 5px solid var(--warn-accent);
+  background: var(--warn-bg);
+  border-radius: 6px;
+  padding: 0.8em 1.1em;
+  margin: 1.3em 0;
+  font-size: 0.94rem;
+}
+
+.provenance::before {
+  content: "ⓘ  Where this data comes from";
+  display: block;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  color: #8a6508;
+  margin-bottom: 0.45em;
+}
+
+/* ---------- file manifest inside a local block ---------- */
+.filelist {
+  font-family: var(--bs-font-monospace, Menlo, Consolas, monospace);
+  font-size: 0.86rem;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 4px;
+  padding: 0.55em 0.8em;
+  margin: 0.5em 0;
+}
+
+/* ---------- session header chips ---------- */
+.session-chip {
+  display: inline-block;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  background: #e4e8ee;
+  color: #3d4855;
+  vertical-align: middle;
+  margin-left: 0.5em;
+}
+
+/* ---------- dark mode ---------- */
+@media (prefers-color-scheme: dark) {
+  .run-local { background: var(--local-bg-dark); border-color: rgba(88, 156, 255, 0.4); }
+  .run-local pre { background: #0b1526; border-color: rgba(88, 156, 255, 0.3); }
+  .run-local::before { color: #6ea8ff; }
+  .runs-here { background: var(--browser-bg-dark); border-color: rgba(90, 190, 130, 0.4); }
+  .runs-here::before { color: #6fd394; }
+  .provenance { background: var(--warn-bg-dark); border-color: rgba(214, 170, 60, 0.4); }
+  .provenance::before { color: #e0b544; }
+  .filelist { background: rgba(255, 255, 255, 0.06); }
+  .session-chip { background: #2b333d; color: #c7d0da; }
+}
