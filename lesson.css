@@ -172,3 +172,9 @@ body.quarto-dark .session-chip { background: #2b333d; color: #c7d0da; }
   background: transparent;
   padding: 0;
 }
+
+/* Break and lunch rows are scaffolding, not content — mute them so the eye
+   skips to the teaching blocks. They are the rows whose third cell is italic. */
+.schedule td em { color: #7a8794; font-style: italic; }
+.schedule td:nth-child(4) { font-size: 0.86rem; line-height: 1.35; }
+body.quarto-dark .schedule td em { color: #93a1b0; }
