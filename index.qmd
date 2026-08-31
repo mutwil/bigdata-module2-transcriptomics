@@ -88,6 +88,10 @@ Blocks like this **cannot run in a browser**. `DESeq2`, `dada2` and `kallisto` a
 not available here — they need a real R installation or a terminal. Copy this code
 into **RStudio on ERDA** and run it there. Each block lists exactly which files you
 need and where to get them on Absalon.
+
+New to ERDA, or not sure how to start RStudio there? See
+[the appendix](#sec-erda) — it walks through logging in, starting a session,
+getting your files in, and finding the terminal.
 :::
 
 The two are not alternatives. The browser cells are where you learn *what the method
@@ -1256,6 +1260,159 @@ print(round(NORM[top_gene, ], 1))
 ```
 
 ---
+
+---
+
+# Appendix — Connecting to RStudio on ERDA {#sec-erda}
+
+Every blue block on this page says "run it in RStudio on ERDA". This is how you get
+there. **Do the sign-up before the first class** — it is not instant.
+
+## 1. Get an ERDA account
+
+ERDA is the University of Copenhagen's *Electronic Research Data Archive*. Go to
+[erda.dk](https://erda.dk) and choose **"Sign up to ERDA using your KU / UCPH
+account"**, then log in with your usual KU credentials. ERDA supports two-factor
+authentication, so have your phone to hand.
+
+You only need a web browser. Nothing is installed on your own machine.
+
+## 2. Start an RStudio session
+
+Once you are logged in to ERDA (follow along in the **R Studio on ERDA** slides in
+the *General course information* module on Absalon — they show a screenshot of every
+step):
+
+1. On the ERDA home page, click the **Jupyter** app (also in the left icon bar).
+2. Under **Select a Jupyter Service**, stay on the **DAG** tab (*Data Analysis
+   Gateway* — the interactive service; MODI is for batch HPC jobs) and press
+   **Start DAG**.
+3. You land on **JupyterHub**. Press **Start My Server**.
+4. Under **Server Options → Select a notebook image**, choose
+   **Big Data in Biotechnology Notebook** — this is the course's own image with the
+   right packages preinstalled. Do not take the default Python notebook.
+5. When the launcher opens, click **RStudio** (under *Notebook*). The same launcher
+   also offers **Terminal** under *Other*.
+
+You now have RStudio running in your browser on a KU machine. Worth knowing about
+DAG sessions: you get **8 cores and 16 GB of memory**, a session is **terminated
+after 2 hours of inactivity**, and the machine itself is **non-persistent** — see
+the next point.
+
+## 3. Know where your files live
+
+Your ERDA files are mounted inside the session at:
+
+```
+~/work          which in full is   /home/jovyan/work/
+```
+
+That is why the exercises use paths like
+`/home/jovyan/work/Rworkdir/C_fructicola_small`.
+
+::: {.provenance}
+**Keep everything under `~/work`.** In ERDA's own words, spawned instances are
+non-persistent: *any change made during a session is lost once the server is
+terminated — the only exception is data saved in the provided mount directory
+(`~/work`)*. And sessions do terminate: after 2 hours of inactivity, automatically.
+If in doubt, save to `~/work` and check the file appears in the ERDA file manager.
+:::
+
+## 4. Get the course data into your session
+
+The exercise data comes as ERDA **share links** posted on Absalon. Two ways to handle
+files, and you can mix them freely:
+
+**In the ERDA file manager** (the normal ERDA web page):
+
+- create a folder for the module
+- upload the `.zip` you got from Absalon or a share link
+- **right-click the zip → unpack**
+
+**Inside RStudio** (the **Files** tab, bottom-right pane):
+
+- **New Folder** to create directories
+- **Rename**, and look under **More** for the rest of the options
+
+A sensible layout for this module:
+
+```
+~/work/Rworkdir/                     your working directory
+    C_fructicola_small/              the FASTQ reads (Session 1)
+    results/                         kallisto output (Session 2)
+    C_fructicola_counts/             count table + annotation (Session 3)
+```
+
+## 5. Find the terminal — you need it for kallisto
+
+Session 2 runs `kallisto` from a command line, not from R. You do not need to leave
+RStudio:
+
+> In RStudio, select the **Terminal** tab, immediately to the right of the
+> **Console** tab in the lower-left pane.
+
+That gives you a real shell on your ERDA virtual machine. Alternatively, go back to
+the DAG launcher and choose **Terminal** instead of RStudio.
+
+The handful of commands you need:
+
+```bash
+pwd               # where am I?
+ls -al            # list everything, with detail
+cd foldername     # go into a folder
+cd ..             # go up one level
+mkdir results     # make a folder
+./kallisto        # run the kallisto program in the current directory
+```
+
+The `./` matters: it means "the file named kallisto **in this directory**", as
+opposed to a program installed system-wide.
+
+## 6. Packages
+
+The **Big Data in Biotechnology Notebook** image already has the packages this
+course needs, including `dada2`, `DESeq2` and the tidyverse — that is the point of
+picking it in step 2. **Skip the `BiocManager::install(...)` lines** in the
+exercises; they are for people working on their own machine. If a package really is
+missing, first check you selected the course image rather than the default one, and
+otherwise tell a teacher — installs into a non-persistent session are slow and are
+gone when the session ends.
+
+## Troubleshooting
+
+| Symptom | What to do |
+|:--|:--|
+| Session will not start, or times out | Wait and try again; a stuck session usually clears. Note sessions end after 2 h of inactivity. |
+| R packages missing (`library(dada2)` fails) | You started the wrong notebook image. Stop the server (JupyterHub → Home) and start it again with **Big Data in Biotechnology Notebook**. |
+| Cannot see your files in RStudio | You are probably not under `~/work`. Run `getwd()` and `setwd("~/work/...")`. |
+| Work disappeared after a session ended | Only `~/work` persists. Anything saved elsewhere was on the temporary machine. |
+| `kallisto: command not found` | You are missing the `./` — the program is a file in your folder, so run `./kallisto`. |
+| A path in the exercise does not exist | The exercises use the author's own path. Substitute your own folder under `~/work`. |
+| Everything is slow | Big files (the 139 MB read set) take time to upload and unpack. This is normal. |
+
+If ERDA itself is broken rather than your code, mail **support@erda.dk** — they
+usually reply within one working day.
+
+## Working on your own machine instead
+
+You can, but you take on the setup. Install [R](https://cran.r-project.org/) and
+[RStudio](https://posit.co/download/rstudio-desktop/), then install the packages
+yourself — `tidyverse` from CRAN, and `dada2` and `DESeq2` through `BiocManager`.
+`kallisto` needs the binary for your operating system (choose the **Linux** build if
+you are putting it on ERDA, macOS or Windows for your own laptop). Expect to spend
+some time on it, and note that the teachers can only reliably help with the ERDA
+setup.
+
+::: {.provenance}
+This appendix condenses the course's own **R Studio on ERDA** slide deck (Absalon →
+*General course information*), which has a screenshot of every step and also covers
+share links and workgroups — read it alongside this page. Details cross-checked
+against the official
+[ERDA documentation](https://erda.ku.dk/user-docs/html/sections/erda/overview/index.html).
+ERDA's interface changes occasionally — if a button has moved, Absalon and the
+teachers are the authority, not this page.
+:::
+
 
 # Where to go next
 
