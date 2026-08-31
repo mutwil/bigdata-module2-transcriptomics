@@ -108,8 +108,8 @@ is just the function that carries it out.
 ::: {.run-local}
 **Get the data.** On Absalon, Module 2 → Exercises, download
 `C_fructicola_GSE103878_small.zip` (139 MB). In the ERDA file manager, upload it into
-your **`module2`** folder ([appendix](#sec-erda) if you have not made it yet), then
-**right-click the zip → Unpack**. You now have
+your **`module2`** folder ([appendix](#sec-erda) if you have not made it yet) — ERDA
+expands the zip automatically on upload. You now have
 `~/work/module2/C_fructicola_GSE103878_small/` with 18 files — 9 samples x 2 mates
 (forward `_1`, reverse `_2`).
 :::
@@ -261,7 +261,8 @@ Useful terminal commands: `cd dirname` (enter a directory), `cd ..` (go up),
 `ls -al` (list with detail), `mkdir xx` (create), `pwd` (where am I).
 
 If your own run does not finish, Absalon has the finished output:
-`abundance_files_from_kallisto.zip` — unpack it into `~/work/module2` and carry on.
+`abundance_files_from_kallisto.zip` — upload it to `~/work/module2` (it expands
+automatically) and carry on.
 :::
 
 Watch what kallisto prints as it runs — the **pseudoalignment rate** is your first
@@ -383,7 +384,7 @@ described in Liang et al. 2018.
 
 ::: {.run-local}
 **Get the data.** From Absalon, upload `C_fructicola_counts.zip` into
-`~/work/module2` and **right-click → Unpack** — that gives you
+`~/work/module2` — it expands automatically, giving you
 `~/work/module2/C_fructicola_counts/` with the count table and the annotation.
 :::
 
@@ -938,16 +939,18 @@ Save everything under `~/work/module2` and it is there next session.
 ## 4. The files: Absalon → ERDA
 
 Everything comes from **Absalon → Module 2 — Transcriptomics**. Download from
-Absalon to your computer, upload into `~/work/module2` in the ERDA file manager,
-and for zips: **right-click → Unpack**. This table is the complete list:
+Absalon to your computer, then upload into `~/work/module2` in the ERDA file
+manager — **zips expand automatically on upload**, so there is nothing further to
+do. (If a zip ever does arrive unexpanded, right-click it → Unpack.) This table is
+the complete list:
 
 | Get from Absalon | Put in ERDA | Used in |
 |:--|:--|:--|
-| `C_fructicola_GSE103878_small.zip` (139 MB) | unpack in `module2` → gives `C_fructicola_GSE103878_small/` | Session 1–2 |
+| `C_fructicola_GSE103878_small.zip` (139 MB) | upload to `module2` → expands to `C_fructicola_GSE103878_small/` | Session 1–2 |
 | `kallisto` (the program file) | straight into `module2` | Session 2 |
 | `GSE103878_1104.transcripts.fasta` | straight into `module2` | Session 2 |
-| `abundance_files_from_kallisto.zip` | unpack in `module2` | Session 2 |
-| `C_fructicola_counts.zip` | unpack in `module2` → gives `C_fructicola_counts/` | Session 3 |
+| `abundance_files_from_kallisto.zip` | upload to `module2` → expands | Session 2 |
+| `C_fructicola_counts.zip` | upload to `module2` → expands to `C_fructicola_counts/` | Session 3 |
 | `gene_sets.csv` — or `download.file()` as in [§4](#sec-enrich) | straight into `module2` | Session 4 |
 | `CountTable_GroupExercise2025.csv` | straight into `module2` | Assignment |
 | `Annot_GroupExercise2025.csv` | straight into `module2` | Assignment |
@@ -1014,8 +1017,8 @@ help with the ERDA setup.
 | Cannot see your files in RStudio | You are probably not under `~/work`. Run `getwd()`; the module folder is `~/work/module2`. |
 | Work disappeared after a session ended | Only `~/work` persists. Anything saved elsewhere was on the temporary machine. |
 | `kallisto: command not found` | You are missing the `./` — the program is a file in your folder, so run `./kallisto`. |
-| A path from this page does not exist | A file from the §4 table is missing or a zip was not unpacked — check `~/work/module2` against the layout above. (The exercise HTMLs on Absalon use the author's own paths; the ones on this page are the canonical ones.) |
-| Everything is slow | Big files (the 139 MB read set) take time to upload and unpack. This is normal. |
+| A path from this page does not exist | A file from the §4 table is missing, or a zip expanded into an extra nesting level — check `~/work/module2` against the layout above. (The exercise HTMLs on Absalon use the author's own paths; the ones on this page are the canonical ones.) |
+| Everything is slow | Big files (the 139 MB read set) take time to upload and expand. This is normal. |
 
 If ERDA itself is broken rather than your code, mail **support@erda.dk** — they
 usually reply within one working day.
