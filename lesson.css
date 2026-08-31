@@ -14,6 +14,7 @@
   --warn-accent: #b8860b;
   --warn-bg: #fdf6e3;
   --warn-bg-dark: #2c2410;
+  --ink: #1b2430;          /* explicit body ink for the callouts */
 }
 
 /* ---------- "run this locally" block ---------- */
@@ -23,6 +24,7 @@
   background: var(--local-bg);
   border-radius: 6px;
   padding: 0.9em 1.1em 0.6em;
+  color: var(--ink);
   margin: 1.4em 0;
 }
 
@@ -40,7 +42,9 @@
 }
 
 /* Code inside a local block is reference material, not editable — make that read. */
-.run-local pre {
+.run-local pre,
+.run-local code {
+  color: var(--ink);
   background: #ffffff;
   border: 1px solid rgba(31, 111, 235, 0.25);
   border-radius: 4px;
@@ -53,6 +57,7 @@
   background: var(--browser-bg);
   border-radius: 6px;
   padding: 0.9em 1.1em 0.6em;
+  color: var(--ink);
   margin: 1.4em 0;
 }
 
@@ -76,6 +81,7 @@
   background: var(--warn-bg);
   border-radius: 6px;
   padding: 0.8em 1.1em;
+  color: var(--ink);
   margin: 1.3em 0;
   font-size: 0.94rem;
 }
@@ -115,15 +121,36 @@
   margin-left: 0.5em;
 }
 
-/* ---------- dark mode ---------- */
-@media (prefers-color-scheme: dark) {
-  .run-local { background: var(--local-bg-dark); border-color: rgba(88, 156, 255, 0.4); }
-  .run-local pre { background: #0b1526; border-color: rgba(88, 156, 255, 0.3); }
-  .run-local::before { color: #6ea8ff; }
-  .runs-here { background: var(--browser-bg-dark); border-color: rgba(90, 190, 130, 0.4); }
-  .runs-here::before { color: #6fd394; }
-  .provenance { background: var(--warn-bg-dark); border-color: rgba(214, 170, 60, 0.4); }
-  .provenance::before { color: #e0b544; }
-  .filelist { background: rgba(255, 255, 255, 0.06); }
-  .session-chip { background: #2b333d; color: #c7d0da; }
+/* ---------- dark mode ----------
+   Keyed on Quarto's own theme class, NOT prefers-color-scheme. The page ships a
+   light theme only, so following the OS setting would put dark boxes behind the
+   page's dark body text and make the callouts unreadable. */
+body.quarto-dark .run-local {
+  background: var(--local-bg-dark);
+  border-color: rgba(88, 156, 255, 0.4);
+  color: #dce6f5;
 }
+body.quarto-dark .run-local pre,
+body.quarto-dark .run-local code {
+  background: #0b1526;
+  border-color: rgba(88, 156, 255, 0.3);
+  color: #dce6f5;
+}
+body.quarto-dark .run-local::before { color: #6ea8ff; }
+
+body.quarto-dark .runs-here {
+  background: var(--browser-bg-dark);
+  border-color: rgba(90, 190, 130, 0.4);
+  color: #dcefe2;
+}
+body.quarto-dark .runs-here::before { color: #6fd394; }
+
+body.quarto-dark .provenance {
+  background: var(--warn-bg-dark);
+  border-color: rgba(214, 170, 60, 0.4);
+  color: #f0e4c8;
+}
+body.quarto-dark .provenance::before { color: #e0b544; }
+
+body.quarto-dark .filelist { background: rgba(255, 255, 255, 0.06); color: #dce6f5; }
+body.quarto-dark .session-chip { background: #2b333d; color: #c7d0da; }
