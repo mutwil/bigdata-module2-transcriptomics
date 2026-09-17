@@ -580,12 +580,12 @@ We keep kallisto in this course folder, rather than trying to install it for the
 whole ERDA system. It is therefore available whenever you work in this module as
 `./bin/kallisto`. The `./` means “use the program in this folder”.
 
-### Files you need
+### What you need
 
-| File | What it is for | Where to put it on ERDA |
+| Input | What it is for | How it arrives in ERDA |
 |:--|:--|:--|
-| `GSE103878_1104.transcripts.fasta` | The transcript sequences used to make our own kallisto index. Download it in the next step. | `~/work/module2/GSE103878_1104.transcripts.fasta` |
-| Filtered forward and reverse reads from Session 1 | The paired reads we want to quantify. | `~/work/module2/C_fructicola_GSE103878_small/filtered/` |
+| CDS reference FASTA | The coding sequences kallisto uses to build our reference index. | Downloaded automatically by the next command. |
+| Filtered forward and reverse reads from Session 1 | The paired reads we want to quantify. | Already in the `filtered/` folder after Session 1. |
 
 For the first run below, the filtered reads must include
 `APP1small_SRR6041847_F_filt.fastq.gz` and
@@ -594,11 +594,12 @@ If they are missing, return to Session 1 and complete filtering before running
 kallisto. You do not need the large full-size read archive in the ERDA share for
 this workbook; we use our smaller course dataset.
 
-### Download the transcript FASTA
+### Download the CDS reference automatically
 
-The original reference is available from the public GEO record for this study.
-Run this in the Terminal. It downloads the compressed file and unpacks the
-plain-text FASTA that we need:
+Kallisto needs a reference sequence file. For this exercise, it is a FASTA file
+of the predicted **coding sequences (CDS)** from *C. fructicola* strain 1104.
+Run this in the Terminal. It downloads and unpacks the file automatically — you
+do **not** download it to your laptop or upload it to ERDA yourself:
 
 ```bash
 cd ~/work/module2
@@ -609,14 +610,15 @@ gzip -dc GSE103878_1104.transcripts.fasta.gz > GSE103878_1104.transcripts.fasta
 
 `curl` downloads the file; `gzip -dc` decompresses it into the FASTA while
 retaining the smaller `.gz` download. The resulting
-`GSE103878_1104.transcripts.fasta` contains 6,759 *C. fructicola* transcript
-sequences, with IDs such as `1104|00001` that match the course count table.
+`GSE103878_1104.transcripts.fasta` contains 6,759 *C. fructicola* CDS sequences,
+with IDs such as `1104|00001` that match the course count table. The historical
+GEO filename says `transcripts`, but it is the CDS reference used here.
 
-::: {.callout-important title="Check the transcript FASTA before you start"}
+::: {.callout-important title="Check the CDS FASTA before you start"}
 A **FASTA** file is a plain-text sequence file: its first non-empty line starts
 with `>`. An **index** is a binary file built from those sequences so kallisto can
-search them quickly. We will make the index ourselves, which is why the transcript
-FASTA is required.
+search them quickly. We will make the index ourselves, which is why the CDS FASTA
+is required.
 
 In the Terminal, check the first two lines before indexing:
 
@@ -624,15 +626,15 @@ In the Terminal, check the first two lines before indexing:
 head -n 2 GSE103878_1104.transcripts.fasta
 ```
 
-You should see a transcript name beginning with `>` followed by DNA bases. Do
+You should see a CDS identifier beginning with `>` followed by DNA bases. Do
 not continue if you see unreadable symbols: that means the file is an index or
 another binary file with the wrong name, not a FASTA file.
 :::
 
-### Build your own transcriptome index
+### Build your own kallisto index
 
 ::: {.terminal}
-With a valid transcript FASTA in `~/work/module2`, run this in the same Terminal:
+With the CDS FASTA just downloaded in `~/work/module2`, run this in the same Terminal:
 
 ```bash
 cd ~/work/module2
@@ -640,9 +642,9 @@ cd ~/work/module2
   GSE103878_1104.transcripts.fasta
 ```
 
-`kallisto index` reads every transcript sequence and makes the searchable binary
+`kallisto index` reads every CDS sequence and makes the searchable binary
 file `C_fructicola_GSE103878.idx`. `-i` means “write the index with this name”; the
-last item is the input transcript FASTA. This only needs to be done once per
+last item is the input CDS FASTA. This only needs to be done once per
 reference. All later quantification commands use the `.idx` file.
 
 If the command says it cannot open a file, run `pwd` and `ls -lh` to check that
@@ -1449,13 +1451,13 @@ Exercise data come from **Absalon → Module 2 — Transcriptomics**. Download t
 files to your computer, then upload them into `~/work/module2` in the ERDA file
 manager — **zips expand automatically on upload**, so there is nothing further to
 do. (If a zip ever does arrive unexpanded, right-click it → Unpack.) Install
-kallisto from the ERDA Terminal as shown in [§2.1](#sec-mapping). This table is the
-complete list:
+kallisto from the ERDA Terminal as shown in [§2.1](#sec-mapping). The CDS reference
+is also downloaded automatically there, so it is not in this list of manual
+downloads:
 
 | File to download | Put in ERDA | Used in |
 |:--|:--|:--|
 | `C_fructicola_GSE103878_small.zip` (139 MB) | upload to `module2` → expands to `C_fructicola_GSE103878_small/` | Session 1–2 |
-| `GSE103878_1104.transcripts.fasta.gz` | download directly in the ERDA Terminal with the command in §2.1; it unpacks to the FASTA | Session 2 |
 | `C_fructicola_counts.zip` | upload to `module2` → expands to `C_fructicola_counts/` | Session 3 |
 | `gene_sets.csv` — or `download.file()` as in [§4](#sec-enrich) | straight into `module2` | Session 4 |
 | `CountTable_GroupExercise2025.csv` | straight into `module2` | Assignment |
@@ -1467,7 +1469,7 @@ When it is all in place, `~/work/module2` looks like this:
 ~/work/module2/
     C_fructicola_GSE103878_small/    the reads (Session 1; filtered/ appears inside)
     bin/kallisto                      the installed program (Session 2)
-    GSE103878_1104.transcripts.fasta  reference transcript sequences (Session 2)
+    GSE103878_1104.transcripts.fasta  CDS reference, downloaded automatically (Session 2)
     C_fructicola_GSE103878.idx        index you build from the FASTA (Session 2)
     results/                         your kallisto output (Session 2)
     C_fructicola_counts/             count table + annotation (Session 3)
