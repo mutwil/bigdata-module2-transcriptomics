@@ -373,20 +373,111 @@ names(filtRs) <- sample.names
 
 ## 1.4 Choose the parameters and run the filter
 
-The decision you are making: longer reads carry more information but accumulate more
-expected errors, so retention drops. `truncLen` cuts the 3' end, `trimLeft` the noisy
-first cycles, `maxEE` sets the error budget.
+We can now use the input and output paths prepared above to **trim unwanted bases,
+discard reads that fail our filters, and save the reads that pass**. Trimming
+shortens a read; filtering removes a whole read. In this paired-end workflow,
+both the forward and reverse read must pass for the pair to be saved.
+
+### Why is `truncLen = c(150, 125)`?
+
+`c(150, 125)` supplies two settings: **150 for forward reads, 125 for reverse
+reads**, in that order. These are positions along the original read, not quality
+scores or percentages.
+
+Our original reads are 150 bases long. Keeping the forward read through position
+150 leaves its tail intact. Cutting the reverse read after position 125 removes
+its final **25 bases**, positions 126–150.
+
+**125 is a starting choice for this exercise, not a universally correct cutoff.**
+The idea is to remove the less reliable tail of the reverse reads, which often
+has poorer quality than the forward reads. Look back at your paired quality
+plots: do the reverse-read scores decline near the end, and does cutting at 125
+seem reasonable? The plot does not automatically establish 125 as the best value.
+We will compare it with 150 below to see the effect on our data.
+
+There is a second cut: **`trimLeft = 10` removes the first 10 bases of both mates**.
+This is intended to remove the noisier initial cycles. With both settings,
+the reads that pass have these lengths:
+
+| Mate | Original positions retained | Final length |
+|:--|:--|--:|
+| Forward | 11–150 | 140 bases |
+| Reverse | 11–125 | 115 bases |
+
+The calculation is `truncLen - trimLeft`: **125 therefore produces a 115-base
+reverse read here**, not a 125-base output. Reads too short to reach the chosen
+cutoff are discarded. See the [DADA2 argument reference](https://github.com/benjjneb/dada2/blob/master/R/filter.R)
+for the trimming rules.
+
+### What is `rm.phix = TRUE`?
+
+**PhiX** is a bacteriophage (a virus that infects bacteria). A library made from
+its known DNA sequence is often added to Illumina sequencing runs as a **control**:
+it helps the sequencing facility assess whether the run worked well and estimate
+error rates. Some reads can therefore come from this control rather than from
+our biological sample. [Illumina explains the control here](https://www.illumina.com/products/by-type/sequencing-kits/cluster-gen-sequencing-reagents/phix-control-v3.html).
+
+In `rm.phix`, **`rm` means remove**, and **`TRUE` turns the option on**. DADA2
+checks for reads matching the PhiX genome and discards them. We want fungal
+RNA-seq reads for our analysis, so we remove this sequencing control if present.
+This option does not mean that PhiX is necessarily present in our files, and it
+does not remove every possible type of contamination.
+
+### What do the other settings mean?
+
+| Setting | Meaning |
+|:--|:--|
+| `maxEE = c(2, 2)` | Allow at most 2 expected errors in each trimmed mate, separately (§1.2). |
+| `truncQ = 2` | Cut at the first base with Q ≤ 2. If this makes the read too short for `truncLen`, discard it. |
+| `minLen = 35` | Discard reads shorter than 35 bases after trimming. |
+| `compress = TRUE` | Save compressed `.fastq.gz` files. |
+| `multithread = FALSE` | Process sample files without parallel workers. |
+
+### Run the filter
+
+The first four arguments connect the files: **forward input (`fnFs`), forward
+output (`filtFs`), reverse input (`fnRs`), reverse output (`filtRs`)**. The settings
+after them tell the function how to process those reads. This is the step that
+actually writes the filtered files.
 
 ```r
 out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
-                     trimLeft   = 10,             # drop the noisy first cycles
-                     truncLen   = c(150, 125),    # forward, reverse
-                     maxEE      = c(2, 2),
-                     truncQ     = 2, minLen = 35, rm.phix = TRUE,
-                     compress   = TRUE, multithread = FALSE)
-out                                # reads.in vs reads.out per sample
-round(100 * out[, "reads.out"] / out[, "reads.in"], 1)   # % kept
+                     trimLeft   = 10,             # remove bases 1–10 from both mates
+                     truncLen   = c(150, 125),    # original end positions: forward, reverse
+                     maxEE      = c(2, 2),       # expected-error limits: forward, reverse
+                     truncQ     = 2,             # cut at the first base with Q <= 2
+                     minLen     = 35,            # minimum length after trimming
+                     rm.phix    = TRUE,          # remove reads matching the PhiX control
+                     compress   = TRUE,          # write compressed output files
+                     multithread = FALSE)        # no parallel sample-file processing
 ```
+
+### How many read pairs survived?
+
+`out <-` stores the **filtering summary** in an object called `out`; the actual
+filtered reads are saved in the output files. Display the summary:
+
+```r
+out
+```
+
+There is one row per sample. `reads.in` is the number of input read pairs, and
+`reads.out` is the number of pairs retained. These are counts of pairs, not the
+number of bases, and the summary does not give separate forward/reverse retention
+percentages.
+
+Calculate the percentage retained for each sample:
+
+```r
+percent_kept <- 100 * out[, "reads.out"] / out[, "reads.in"]
+round(percent_kept, 1)
+```
+
+In `out[, "reads.out"]`, the blank before the comma selects **all rows**, and
+`"reads.out"` selects that column. We divide retained pairs by input pairs and
+multiply by 100. For example, 80,000 retained pairs out of 100,000 input pairs
+gives `100 * 80000 / 100000 = 80%`. `round(..., 1)` displays one **decimal place**;
+unlike `signif()` in §1.2, it does not specify significant digits.
 
 *Question (big-data aside):* what would happen if R loaded an entire FASTQ file
 into memory? How does `filterAndTrim` deal with this — and if you set
@@ -408,9 +499,11 @@ DAG). More threads is faster only until you hit that ceiling — which is why "j
 use all the cores" is not automatically the right call on a shared machine.
 :::
 
-*Your turn:* re-run with `truncLen = c(150, 150)` (no truncation of the reverse
-reads) into a **different** output folder and compare the percentages. Why does
-keeping more sequence cost you reads?
+*Your turn:* re-run with `truncLen = c(150, 150)` into a **different** output
+folder. This retains the reverse-read tail; `trimLeft = 10` still removes the
+first 10 bases, so passing mates are now both 140 bases long. Compare the
+percentages retained. Does keeping the extra 25 reverse-read bases affect how
+many pairs pass, and why?
 
 ::: {.callout-tip collapse="true" title="Solution"}
 ```r
@@ -422,10 +515,16 @@ out2 <- filterAndTrim(fnFs, filtFs2, fnRs, filtRs2,
                       compress = TRUE, multithread = FALSE)
 round(100 * out2[, "reads.out"] / out2[, "reads.in"], 1)
 ```
-Retention of the reverse reads drops by several percent: the last 25 cycles are the
-worst ones, so keeping them pushes many reads over the `maxEE = 2` budget. Truncating
-at 125 keeps ~95% of reverse reads; at 150 it is closer to 90%. The choice is a
-trade-off you should be able to defend, not a default.
+Compare these percentages with `round(percent_kept, 1)` from the first run.
+Keeping the extra bases adds their error probabilities to the reverse read's
+expected-error total. If that pushes a mate above `maxEE = 2`, the entire pair
+is discarded. You may therefore retain fewer pairs when keeping longer reads;
+the size of the difference depends on your data. Use your actual output rather
+than aiming for a particular percentage. If the percentages are unchanged,
+discuss why the extra bases did not change which pairs passed the filters.
+
+The choice is a balance between keeping more sequence per read and keeping more
+read pairs. Use the quality plots and filtering results to justify it.
 :::
 
 ---
