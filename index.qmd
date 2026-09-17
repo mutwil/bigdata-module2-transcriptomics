@@ -842,20 +842,13 @@ whether any two columns are identical — biological replicates never are.
 round(cor(log2(count_matrix + 1)), 3)          # anything EXACTLY 1 off-diagonal?
 
 which(duplicated(t(count_matrix)))             # any column an exact copy?
-
-# the smoking gun, at file level:
-tools::md5sum(file.path(abdir, c("CON1_abundance.tsv", "CON2_abundance.tsv")))
 ```
 
-::: {.provenance}
-You will find that **CON1 and CON2 are byte-identical** — the same file twice, with
-a correlation of exactly 1. Two biological replicates cannot be identical to the last
-decimal, so this is a file-handling mistake in the course archive, not biology. Had
-you run DESeq2 on this matrix it would have reported an impossibly small within-group
-variance for CON and inflated your significance. **This is why you look first.**
-(The main count table used in Session 3 is unaffected — its CON1 and CON2 are
-genuinely different.)
-:::
+For this dataset, no off-diagonal correlation is exactly 1 and
+`which(duplicated(...))` returns `named integer(0)`: the check passes. If it ever
+returns a sample number, two columns are identical. Stop and check the input files
+before continuing — exact copies are a file-handling mistake, not biological
+replicates.
 
 ---
 
