@@ -711,39 +711,63 @@ target_id | length | eff_length | est_counts | tpm
 length corrected for the fragment-length distribution; `tpm` is transcripts per
 million — length- and depth-normalised, so it sums to 1e6 in every sample.
 
-## 2.2 The sample-name puzzle
+## 2.2 Name the samples for the count table
 
-Before you can combine nine output files you need nine clean sample names. Work
-through why each attempt fails:
+Kallisto has made **one `abundance.tsv` table per sample**. The next step is to
+combine the `est_counts` column from all nine tables into one count matrix:
+
+```text
+                 APP1small_SRR6041847   APP2small_SRR6041848   ...
+1104|00001                    23.4                   19.8     ...
+1104|00002                     0.0                    12.1     ...
+...                             ...                     ...     ...
+```
+
+Each row is a transcript and each column is one sample. This is the format we
+need for the differential-expression analysis in Session 3. The column names
+must identify the sample unambiguously, so we keep both its short label
+(`APP1small`) and its sequencing-run identifier (`SRR6041847`).
+
+The following is a small practice exercise in extracting those two useful parts
+from read filenames. First, run it one block at a time and look at each result:
 
 ```r
 fnames <- c("APP1small_SRR6041847_1.fastq.gz", "APP2small_SRR6041848_1.fastq.gz",
             "CON1small_SRR6041844_1.fastq.gz", "CON2small_SRR6041845_1.fastq.gz")
 
-# strsplit() cuts each name at every "_" and returns a LIST of pieces
+# strsplit() cuts at every "_". [[1]] asks for the pieces of the FIRST filename.
 strsplit(fnames, "_")[[1]]
 
-# take the 1st and 2nd piece of each name
+# Take the first piece from every filename, then the second piece from every filename
 part1 <- sapply(strsplit(fnames, "_"), function(x) x[1])
 part2 <- sapply(strsplit(fnames, "_"), function(x) x[2])
 part1
 part2
-
-c(part1, part2)          # stacks them into 8 elements. No.
-paste(part1, part2)      # joined with a SPACE. No.
-paste0(part1, part2)     # no separator at all. No.
 ```
 
-*Your turn:* produce `"APP1small_SRR6041847"` etc. — the two pieces joined with an
-underscore.
+For the first filename, the split pieces are `"APP1small"`, `"SRR6041847"`
+and `"1.fastq.gz"`. We want to join the first two pieces with one underscore.
+Try the following possible joins and inspect their output:
+
+```r
+c(part1, part2)          # eight separate items: all first pieces, then all second pieces
+paste(part1, part2)      # joins each pair, but inserts a space
+paste0(part1, part2)     # joins each pair, but inserts no separator
+```
+
+*Your turn:* make a vector called `sample.names` containing
+`"APP1small_SRR6041847"`, `"APP2small_SRR6041848"`, and so on. You need the
+`sep` argument of `paste()`.
 
 ::: {.callout-tip collapse="true" title="Solution"}
 ```r
 sample.names <- paste(part1, part2, sep = "_")
 sample.names
 ```
-`paste()` takes a `sep` argument. The `sapply`/`strsplit`/`paste` pattern is the
-standard way to turn file names into sample names.
+`paste()` takes a `sep` argument. The `sapply`/`strsplit`/`paste` pattern is a
+standard way to turn filenames into useful sample names. In §2.3, the same names
+are read from the result-folder names and become the column labels of the count
+matrix.
 :::
 
 ## 2.3 Build the count matrix
