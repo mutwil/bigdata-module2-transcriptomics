@@ -584,7 +584,7 @@ whole ERDA system. It is therefore available whenever you work in this module as
 
 | File | What it is for | Where to put it on ERDA |
 |:--|:--|:--|
-| `GSE103878_1104.transcripts.fasta` | The transcript sequences used to make our own kallisto index. This must be a real text FASTA file. | `~/work/module2/GSE103878_1104.transcripts.fasta` |
+| `GSE103878_1104.transcripts.fasta` | The transcript sequences used to make our own kallisto index. Download it in the next step. | `~/work/module2/GSE103878_1104.transcripts.fasta` |
 | Filtered forward and reverse reads from Session 1 | The paired reads we want to quantify. | `~/work/module2/C_fructicola_GSE103878_small/filtered/` |
 | `abundance_files_from_kallisto.zip` from Absalon | Backup quantification results for the count-table exercise if your own run does not finish. | Upload into `~/work/module2`; check that it expands to `abundance_files_from_kallisto/`. |
 
@@ -594,6 +594,24 @@ For the first run below, the filtered reads must include
 If they are missing, return to Session 1 and complete filtering before running
 kallisto. You do not need the large full-size read archive in the ERDA share for
 this workbook; we use our smaller course dataset.
+
+### Download the transcript FASTA
+
+The original reference is available from the public GEO record for this study.
+Run this in the Terminal. It downloads the compressed file and unpacks the
+plain-text FASTA that we need:
+
+```bash
+cd ~/work/module2
+curl -fL -o GSE103878_1104.transcripts.fasta.gz \
+  https://ftp.ncbi.nlm.nih.gov/geo/series/GSE103nnn/GSE103878/suppl/GSE103878_1104.transcripts.fasta.gz
+gzip -dc GSE103878_1104.transcripts.fasta.gz > GSE103878_1104.transcripts.fasta
+```
+
+`curl` downloads the file; `gzip -dc` decompresses it into the FASTA while
+retaining the smaller `.gz` download. The resulting
+`GSE103878_1104.transcripts.fasta` contains 6,759 *C. fructicola* transcript
+sequences, with IDs such as `1104|00001` that match the course count table.
 
 ::: {.callout-important title="Check the transcript FASTA before you start"}
 A **FASTA** file is a plain-text sequence file: its first non-empty line starts
@@ -1381,7 +1399,7 @@ complete list:
 | File to download | Put in ERDA | Used in |
 |:--|:--|:--|
 | `C_fructicola_GSE103878_small.zip` (139 MB) | upload to `module2` → expands to `C_fructicola_GSE103878_small/` | Session 1–2 |
-| `GSE103878_1104.transcripts.fasta` | straight into `module2`; use it to build the index in §2.1 | Session 2 |
+| `GSE103878_1104.transcripts.fasta.gz` | download directly in the ERDA Terminal with the command in §2.1; it unpacks to the FASTA | Session 2 |
 | `abundance_files_from_kallisto.zip` | upload to `module2` → expands | Session 2 |
 | `C_fructicola_counts.zip` | upload to `module2` → expands to `C_fructicola_counts/` | Session 3 |
 | `gene_sets.csv` — or `download.file()` as in [§4](#sec-enrich) | straight into `module2` | Session 4 |
