@@ -3,6 +3,7 @@ project:
   output-dir: _site
   resources:
     - data
+    - assets
 
 website:
   title: "Big Data — Module 2: Transcriptomics"

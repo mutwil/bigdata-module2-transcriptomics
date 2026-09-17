@@ -728,6 +728,16 @@ need for the differential-expression analysis in Session 3. The column names
 must identify the sample unambiguously, so we keep both its short label
 (`APP1small`) and its sequencing-run identifier (`SRR6041847`).
 
+::: {.callout-note title="Where this count matrix goes next"}
+![Simplified layout of the DESeq2 data object: transcript information at left (`rowData`), the count matrix at right (`assay(s)`), and sample information above it (`colData`).](assets/deseq2-object-overview.png){width=280}
+
+The large **`assay(s)`** rectangle is the count matrix we are about to make:
+transcripts are rows and samples are columns. In Session 3, we will also add
+**`colData`** (one row of information for each sample, such as APP or CON) and
+**`rowData`** (the transcript annotation). This is why clear, matching sample
+names matter now.
+:::
+
 The following is a small practice exercise in extracting those two useful parts
 from read filenames. First, run it one block at a time and look at each result:
 
