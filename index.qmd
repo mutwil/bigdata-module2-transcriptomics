@@ -126,8 +126,8 @@ list.files(path)                 # you should see the 18 fastq.gz files
 fnFs <- sort(list.files(path, pattern = "_1.fastq.gz", full.names = TRUE))
 fnRs <- sort(list.files(path, pattern = "_2.fastq.gz", full.names = TRUE))
 
-plotQualityProfile(fnFs[1:2])    # forward reads
-plotQualityProfile(fnRs[1:2])    # reverse reads
+# Forward and reverse reads from the same sample, side by side
+plotQualityProfile(c(fnFs[1], fnRs[1]))
 ```
 
 *Question:* look at the file names first — where do these files come from, and what
@@ -145,7 +145,7 @@ swapped or duplicated files later.
 :::
 
 Read the plots: the grey heat map is the frequency of each quality score at each
-position, the green line the median. Two features are typical of Illumina data and
+position, the green line the mean. Two features are typical of Illumina data and
 both matter for what you do next: the first few cycles are noisier, and quality
 decays towards the 3' end — and the **reverse reads are consistently worse** than the
 forward reads, because they are sequenced last, after the cluster has degraded.
@@ -168,12 +168,12 @@ Knowing the read length matters immediately: it is the upper bound for `truncLen
 in §1.4, and after `trimLeft = 10` your forward reads are effectively 140 bp.
 :::
 
-*Your turn:* plot a forward and a reverse profile of the **same** sample next to
-each other. Which is worse, and where?
+*Your turn:* plot the forward and reverse profiles of the **second** sample next
+to each other. Which is worse, and where?
 
 ::: {.callout-tip collapse="true" title="Solution"}
 ```r
-plotQualityProfile(c(fnFs[1], fnRs[1]))
+plotQualityProfile(c(fnFs[2], fnRs[2]))
 ```
 The reverse read (`_2`) sits visibly lower, and the gap widens towards the 3' end —
 that is where truncation will help most.
