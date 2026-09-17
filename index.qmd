@@ -339,6 +339,25 @@ bases can matter so much for longer, less reliable reads.
 
 ## 1.3 Set up the output files
 
+Before filtering, we need to decide **what to call the filtered files and where
+to save them**. Each sample has two input files: one for the forward reads and
+one for the reverse reads. We will therefore prepare two output filenames per
+sample, keeping the forward and reverse files matched to the same sample.
+
+First, we extract a sample name from each forward-read filename. For example,
+`APP1small_SRR6041847_1.fastq.gz` becomes `APP1small_SRR6041847`. We then use that
+name to build paths to two new files inside a **`filtered/` subfolder** of our
+reads folder: one ending in `_F_filt.fastq.gz` for forward reads and one ending
+in `_R_filt.fastq.gz` for reverse reads. The original input files will remain
+available.
+
+The code below only prepares these names and paths; **it does not filter reads
+or create the output files yet**. `filtFs` and `filtRs` store the forward and
+reverse output paths, respectively. The final two lines label their entries
+with the sample names so we can see which paths belong to each sample. In §1.4,
+we will give these paths to `filterAndTrim()`, which writes the filtered reads
+to those files.
+
 ```r
 # Build one clean name per sample from the file names (see §2.2 for how this works)
 sample.names <- paste(sapply(strsplit(basename(fnFs), "_"), `[`, 1),
