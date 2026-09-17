@@ -788,12 +788,25 @@ The count table is just the `est_counts` column of every sample, glued side by s
 and keyed on `target_id`. Base R does it in a few lines from the `results/` folders
 you just made with kallisto:
 
+Each proper course result folder ends in an SRA run ID such as `_SRR6041847`.
+The selection below therefore keeps exactly those folders. If you ran an older
+version of the first-example command, you may also have `results/APP1`; that is
+the same APP1 reads under a short, old name, not an additional sample, so it is
+left out automatically.
+
 ```r
 abdir <- "~/work/module2/results"
 files <- list.files(abdir, pattern = "abundance\\.tsv$",
                     full.names = TRUE, recursive = TRUE)
 samps <- basename(dirname(files))
 samps
+
+# Keep only the nine course sample folders, named e.g. APP1small_SRR6041847
+keep <- grepl("_SRR[0-9]+$", samps)
+files <- files[keep]
+samps <- samps[keep]
+samps
+length(samps)     # should be 9
 
 tables <- lapply(files, read.delim)
 names(tables) <- samps
