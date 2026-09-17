@@ -534,33 +534,57 @@ read pairs. Use the quality plots and filtering results to justify it.
 
 ## 2.1 Run kallisto
 
-### Before you start: set up kallisto on ERDA
+### Before you start: install kallisto on ERDA
 
-**kallisto is a separate program, not an R package.** We run it on the ERDA
-machine through RStudio's **Terminal** tab. You do not install it with
-`install.packages()` or `library()`.
+**kallisto is a separate Linux program, not an R package.** We run it on the
+ERDA machine through RStudio's **Terminal** tab. You do not use
+`install.packages()` or `library()` for this.
 
-1. Open your RStudio session on ERDA using the **Big Data in Biotechnology
-   Notebook** image ([connection reminder](#sec-erda)).
-2. Open the [course's ERDA download folder](https://sid.erda.dk/cgi-sid/ls.py?share_id=B1wIN707mx).
-   Download **`kallisto`** and **`C_fructicola_GSE103878.idx`** to your computer,
-   then upload both to your **`module2`** folder in ERDA. In RStudio this folder
-   is `~/work/module2`.
-3. Use the course's **Linux** executable even if your own laptop is a Mac or
-   Windows computer: the program runs on ERDA, which uses Linux. The supplied
-   course executable is kallisto **0.46.1**.
+Open an ERDA RStudio session with the **Big Data in Biotechnology Notebook**
+image ([connection reminder](#sec-erda)), click **Terminal** next to Console,
+and paste this complete installation script:
 
-For this exercise, installing kallisto means placing that executable in the
-working folder and giving it permission to run. No administrator installation
-is needed. Keep the filename exactly **`kallisto`**, without an added extension
-or a duplicate-download suffix such as `(1)`.
+```bash
+set -euo pipefail
+
+cd ~/work/module2
+mkdir -p bin
+
+install_tmp="$(mktemp -d)"
+trap 'rm -rf "$install_tmp"' EXIT
+
+curl -fL --retry 3 -o "$install_tmp/kallisto.tar.gz" \
+  https://github.com/pachterlab/kallisto/releases/download/v0.46.1/kallisto_linux-v0.46.1.tar.gz
+
+tar -xzf "$install_tmp/kallisto.tar.gz" -C "$install_tmp"
+
+kallisto_file="$(find "$install_tmp" -type f -name kallisto -print -quit)"
+
+if [ -z "$kallisto_file" ]; then
+  echo "Could not find the kallisto executable after extraction."
+  exit 1
+fi
+
+cp "$kallisto_file" bin/kallisto
+chmod u+x bin/kallisto
+
+./bin/kallisto version
+```
+
+This downloads kallisto **0.46.1** directly from its official release, puts its
+executable in `~/work/module2/bin/`, and checks that it runs. `chmod u+x` gives
+your ERDA user account permission to execute the file. No administrator rights
+are needed. The final line should print the kallisto version.
+
+We keep kallisto in this course folder, rather than trying to install it for the
+whole ERDA system. It is therefore available whenever you work in this module as
+`./bin/kallisto`. The `./` means “use the program in this folder”.
 
 ### Files you need
 
 | File | What it is for | Where to put it on ERDA |
 |:--|:--|:--|
-| [`kallisto`](https://sid.erda.dk/share_redirect/B1wIN707mx/kallisto) | The Linux program that performs quantification. | `~/work/module2/kallisto` |
-| [`C_fructicola_GSE103878.idx`](https://sid.erda.dk/share_redirect/B1wIN707mx/C_fructicola_GSE103878.idx) | The supplied transcriptome index: a searchable reference for kallisto. | `~/work/module2/C_fructicola_GSE103878.idx` |
+| `GSE103878_1104.transcripts.fasta` | The transcript sequences used to make our own kallisto index. This must be a real text FASTA file. | `~/work/module2/GSE103878_1104.transcripts.fasta` |
 | Filtered forward and reverse reads from Session 1 | The paired reads we want to quantify. | `~/work/module2/C_fructicola_GSE103878_small/filtered/` |
 | `abundance_files_from_kallisto.zip` from Absalon | Backup quantification results for the count-table exercise if your own run does not finish. | Upload into `~/work/module2`; check that it expands to `abundance_files_from_kallisto/`. |
 
@@ -571,50 +595,51 @@ If they are missing, return to Session 1 and complete filtering before running
 kallisto. You do not need the large full-size read archive in the ERDA share for
 this workbook; we use our smaller course dataset.
 
-::: {.callout-note title="We use the supplied index for this exercise"}
-A **FASTA** file contains reference sequences as text. An **index** is a binary
-file built from those sequences so kallisto can search them efficiently. Once
-the index exists, `kallisto quant` uses the index and the paired reads.
+::: {.callout-important title="Check the transcript FASTA before you start"}
+A **FASTA** file is a plain-text sequence file: its first non-empty line starts
+with `>`. An **index** is a binary file built from those sequences so kallisto can
+search them quickly. We will make the index ourselves, which is why the transcript
+FASTA is required.
 
-The shared file named `GSE103878_1104_transcripts.fasta` was checked on
-17 September 2026: its header is binary and matches the supplied index, rather
-than a FASTA sequence header. **Use `C_fructicola_GSE103878.idx` for this exercise.**
-Building a new index with `kallisto index` requires a valid reference FASTA;
-the current `.fasta` file in that share is not suitable for that step.
+In the Terminal, check the first two lines before indexing:
+
+```bash
+head -n 2 GSE103878_1104.transcripts.fasta
+```
+
+You should see a transcript name beginning with `>` followed by DNA bases. Do
+not continue if you see unreadable symbols: that means the file is an index or
+another binary file with the wrong name, not a FASTA file.
 :::
 
-### Give the program permission to run
+### Build your own transcriptome index
 
 ::: {.terminal}
-**kallisto runs in a terminal, not in R.** In RStudio, click the **Terminal** tab
-(next to Console), then paste:
+With a valid transcript FASTA in `~/work/module2`, run this in the same Terminal:
 
 ```bash
 cd ~/work/module2
-ls -lh kallisto C_fructicola_GSE103878.idx
-chmod u+x kallisto
-./kallisto version
+./bin/kallisto index -i C_fructicola_GSE103878.idx \
+  GSE103878_1104.transcripts.fasta
 ```
 
-`cd` selects our working folder. `ls -lh` lists the two files and their sizes.
-`chmod u+x kallisto` gives your user permission to **execute** the program;
-uploads may not preserve this permission. `./kallisto version` checks that the
-program runs and prints its version number. The course copy should report 0.46.1.
+`kallisto index` reads every transcript sequence and makes the searchable binary
+file `C_fructicola_GSE103878.idx`. `-i` means “write the index with this name”; the
+last item is the input transcript FASTA. This only needs to be done once per
+reference. All later quantification commands use the `.idx` file.
 
-The `./` means **the program file in the current folder**. If you see
-`Permission denied`, check the `chmod` step. If you see `No such file or directory`,
-check the folder and exact filename. If the files are present but the program
-still will not run, ask the teacher to check the executable and ERDA session.
+If the command says it cannot open a file, run `pwd` and `ls -lh` to check that
+you are in `~/work/module2` and that the filename is exact.
 :::
 
 ### Quantify your first sample
 
-Use the supplied index and the two filtered APP1 files. Run this in the same
+Use the index you just built and the two filtered APP1 files. Run this in the same
 **Terminal** tab:
 
 ```bash
 mkdir -p results
-./kallisto quant -i C_fructicola_GSE103878.idx -o results/APP1 -t 2 \
+./bin/kallisto quant -i C_fructicola_GSE103878.idx -o results/APP1 -t 2 \
     C_fructicola_GSE103878_small/filtered/APP1small_SRR6041847_F_filt.fastq.gz \
     C_fructicola_GSE103878_small/filtered/APP1small_SRR6041847_R_filt.fastq.gz
 ```
@@ -1346,19 +1371,17 @@ Save everything under `~/work/module2` and it is there next session.
 
 ## 4. The files: Absalon → ERDA
 
-Exercise data come from **Absalon → Module 2 — Transcriptomics**; the kallisto
-executable and reference index are in the
-[course's ERDA download folder](https://sid.erda.dk/cgi-sid/ls.py?share_id=B1wIN707mx)
-as explained in §2.1. Download to your computer, then upload into `~/work/module2` in the ERDA file
+Exercise data come from **Absalon → Module 2 — Transcriptomics**. Download the
+files to your computer, then upload them into `~/work/module2` in the ERDA file
 manager — **zips expand automatically on upload**, so there is nothing further to
-do. (If a zip ever does arrive unexpanded, right-click it → Unpack.) This table is
-the complete list:
+do. (If a zip ever does arrive unexpanded, right-click it → Unpack.) Install
+kallisto from the ERDA Terminal as shown in [§2.1](#sec-mapping). This table is the
+complete list:
 
 | File to download | Put in ERDA | Used in |
 |:--|:--|:--|
 | `C_fructicola_GSE103878_small.zip` (139 MB) | upload to `module2` → expands to `C_fructicola_GSE103878_small/` | Session 1–2 |
-| `kallisto` (the program file; ERDA share) | straight into `module2`; run `chmod u+x kallisto` in the Terminal | Session 2 |
-| `C_fructicola_GSE103878.idx` (reference index; ERDA share) | straight into `module2` | Session 2 |
+| `GSE103878_1104.transcripts.fasta` | straight into `module2`; use it to build the index in §2.1 | Session 2 |
 | `abundance_files_from_kallisto.zip` | upload to `module2` → expands | Session 2 |
 | `C_fructicola_counts.zip` | upload to `module2` → expands to `C_fructicola_counts/` | Session 3 |
 | `gene_sets.csv` — or `download.file()` as in [§4](#sec-enrich) | straight into `module2` | Session 4 |
@@ -1370,8 +1393,9 @@ When it is all in place, `~/work/module2` looks like this:
 ```
 ~/work/module2/
     C_fructicola_GSE103878_small/    the reads (Session 1; filtered/ appears inside)
-    kallisto                         the program (Session 2)
-    C_fructicola_GSE103878.idx         supplied reference index (Session 2)
+    bin/kallisto                      the installed program (Session 2)
+    GSE103878_1104.transcripts.fasta  reference transcript sequences (Session 2)
+    C_fructicola_GSE103878.idx        index you build from the FASTA (Session 2)
     results/                         your kallisto output (Session 2)
     abundance_files_from_kallisto/   backup kallisto output
     C_fructicola_counts/             count table + annotation (Session 3)
@@ -1426,7 +1450,7 @@ help with the ERDA setup.
 | R packages missing (`library(dada2)` fails) | You started the wrong notebook image. Stop the server (JupyterHub → Home) and start it again with **Big Data in Biotechnology Notebook**. |
 | Cannot see your files in RStudio | You are probably not under `~/work`. Run `getwd()`; the module folder is `~/work/module2`. |
 | Work disappeared after a session ended | Only `~/work` persists. Anything saved elsewhere was on the temporary machine. |
-| `kallisto: command not found` | You are missing the `./` — the program is a file in your folder, so run `./kallisto`. |
+| `kallisto: command not found` | Use the program installed for this course folder: `./bin/kallisto`. |
 | A path from this page does not exist | A file from the §4 table is missing, or a zip expanded into an extra nesting level — check `~/work/module2` against the layout above. (The exercise HTMLs on Absalon use the author's own paths; the ones on this page are the canonical ones.) |
 | Everything is slow | Big files (the 139 MB read set) take time to upload and expand. This is normal. |
 
