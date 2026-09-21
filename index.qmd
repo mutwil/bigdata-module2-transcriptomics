@@ -144,8 +144,16 @@ decode a sequencing file name is worth more than it looks: it is how you catch
 swapped or duplicated files later.
 :::
 
-Read the plots: the grey heat map is the frequency of each quality score at each
-position, the green line the mean. Two features are typical of Illumina data and
+Read the plots: the grey heat map shows the frequency of each quality score at
+each base position. The **green line** shows the mean quality score at each
+position, and the **orange lines** show the quartiles of the quality-score
+distribution. The **red line** shows the scaled proportion of reads that extend
+to at least that position. This is especially useful when read lengths vary;
+Illumina reads are typically all the same length before trimming, so the red line
+is usually flat. It represents read coverage along the sequence, not a quality
+score.
+
+Two features are typical of Illumina data and
 both matter for what you do next: the first few cycles are noisier, and quality
 decays towards the 3' end — and the **reverse reads are consistently worse** than the
 forward reads, because they are sequenced last, after the cluster has degraded.
