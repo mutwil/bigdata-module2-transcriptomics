@@ -147,11 +147,12 @@ swapped or duplicated files later.
 Read the plots: the grey heat map shows the frequency of each quality score at
 each base position. The **green line** shows the mean quality score at each
 position, and the **orange lines** show the quartiles of the quality-score
-distribution. The **red line** shows the scaled proportion of reads that extend
-to at least that position. This is especially useful when read lengths vary;
-Illumina reads are typically all the same length before trimming, so the red line
-is usually flat. It represents read coverage along the sequence, not a quality
-score.
+distribution. **A red line appears only when the sampled reads vary in length.**
+It shows the scaled proportion of reads that extend to at least that position,
+not a quality score. When all sampled reads have the same length, the function
+omits this line; this is normal for untrimmed Illumina reads. Passing forward and
+reverse files together with `plotQualityProfile(c(fnFs[1], fnRs[1]))` does not
+disable the red line.
 
 Two features are typical of Illumina data and
 both matter for what you do next: the first few cycles are noisier, and quality
