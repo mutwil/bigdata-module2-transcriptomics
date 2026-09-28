@@ -1166,8 +1166,7 @@ plot identifies which genes are significantly differentially expressed.
 ## 3.5 The results table
 
 We want to compare **APP with CON**, using a false discovery rate (FDR) cutoff of
-**5%**. Define that cutoff once, so the results calculation and our gene counts use
-the same value.
+**5%**.
 
 ```r
 fdr_cutoff <- 0.05
@@ -1188,17 +1187,9 @@ condition of interest, and the reference condition. A positive `log2FoldChange`
 means higher expression in **APP**; a negative value means higher expression in
 **CON**.
 
-**Why do we use the cutoff more than once?** These are different tasks, not
-repeated rounds of multiple-testing correction:
-
-- `alpha = fdr_cutoff` tells DESeq2 our intended FDR threshold. It uses that target
-  to optimise **independent filtering** of low-information genes. It does **not**
-  return only significant genes: `res` still contains significant and
-  non-significant rows, and some rows without an available adjusted p-value.
-- `summary(res)` reports an overview using that same target by default.
-- Comparing `padj` with the cutoff below identifies which genes we actually call
-  significant. We can then count all of them, or only those changing in one
-  direction.
+The results table contains both significant and non-significant genes. Create
+`significant` once, then use it to count all significant genes and those changing
+in each direction.
 
 ```r
 # TRUE for genes with an available adjusted p-value below our cutoff
@@ -1217,38 +1208,9 @@ available. `&` means both conditions must hold. The resulting `significant` vect
 contains `TRUE` or `FALSE` for each gene. `sum()` counts the `TRUE` entries because
 R treats `TRUE` as 1 and `FALSE` as 0.
 
-A missing `padj` is **not always caused by independent filtering**. Count outliers
-or all-zero genes can also cause missing results (although all-zero rows were
-already removed by our prefilter). These rows are excluded from our significance
-counts; a missing value is not evidence that a gene is unchanged. See the
-[DESeq2 results documentation](https://bioconductor.org/packages/release/bioc/manuals/DESeq2/man/DESeq2.pdf).
-
-*Question:* repeat the comparison using a **10% FDR target** for both `results()`
-and gene selection. How many genes are significantly **higher in APP** now?
-Compare with the 5% result. Keep the original `res` and `fdr_cutoff` unchanged for
-the following sections.
-
-::: {.callout-tip collapse="true" title="Answer"}
-```r
-fdr_cutoff10 <- 0.10
-res10 <- results(dds, contrast = c("condition", "APP", "CON"),
-                 alpha = fdr_cutoff10)
-summary(res10)
-
-significant10 <- !is.na(res10$padj) & res10$padj < fdr_cutoff10
-
-c(up_APP_FDR_5pct  = sum(significant & res$log2FoldChange > 0),
-  up_APP_FDR_10pct = sum(significant10 & res10$log2FoldChange > 0))
-```
-The 10% threshold is more permissive, so we generally expect more discoveries.
-Report the actual counts you obtain. Two things change here: the selection cutoff
-and the target used to optimise independent filtering. The filtered set, and hence
-some adjusted p-values, can therefore differ between the two runs. Changing only
-`alpha` would **not** automatically change a separate expression such as
-`res$padj < 0.05`. The default `alpha` in `results()` is 0.1, but specifying it
-explicitly makes our intention clear. State your FDR target in your report and use
-it consistently when selecting genes.
-:::
+`NA` means no adjusted p-value is available, for example because a gene was
+filtered for low information or flagged for a count outlier. We exclude these
+genes from the counts above; `NA` does not mean a gene is unchanged.
 
 ## 3.6 MA plot and volcano plot
 
@@ -1256,7 +1218,7 @@ it consistently when selecting genes.
 plotMA(res, ylim = c(-12, 12))
 
 # volcano, by hand
-sig <- !is.na(res$padj) & res$padj < fdr_cutoff
+sig <- significant                         # reuse the selection from §3.5
 plot(res$log2FoldChange, -log10(res$pvalue), pch = 20, cex = 0.35,
      col = ifelse(sig, adjustcolor("#C44E52", 0.55), adjustcolor("grey40", 0.35)),
      xlab = "log2 fold change (APP / CON)", ylab = "-log10(p-value)",
