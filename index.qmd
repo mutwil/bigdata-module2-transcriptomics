@@ -957,43 +957,211 @@ a small fraction of reads maps to the *C. fructicola* transcriptome, so the fung
 library is effectively tiny. This is exactly what size factors are for — but it also
 means IL carries much less statistical power.
 
-## 3.4 Variance stabilisation, PCA and sample distances
+### Inspect the fitted dispersions {#sec-dispersion-check}
 
-Raw RNAseq counts are heteroscedastic: highly expressed genes vary more in absolute
-terms. `vst()` corrects this, and PCA and clustering are run on VST values, never on
-raw counts.
+`DESeq(dds)` also estimated how variable each gene's counts are around their
+expected values. In our model, each gene has **one dispersion shared across
+conditions**, while its expected expression can differ between conditions.
 
 ```r
-vsd <- vst(dds, blind = FALSE)
-
-# mean-SD before and after: a flat trend is the goal
-par(mfrow = c(1, 2))
-lc <- log2(counts(dds) + 1)
-plot(rowMeans(lc), apply(lc, 1, sd), pch = 20, cex = 0.3,
-     col = adjustcolor("grey30", 0.25),
-     xlab = "mean log2(count+1)", ylab = "SD", main = "log2(count + 1)")
-lines(lowess(rowMeans(lc), apply(lc, 1, sd)), col = "red", lwd = 2.5)
-va <- assay(vsd)
-plot(rowMeans(va), apply(va, 1, sd), pch = 20, cex = 0.3,
-     col = adjustcolor("grey30", 0.25),
-     xlab = "mean VST value", ylab = "SD", main = "vst()")
-lines(lowess(rowMeans(va), apply(va, 1, sd)), col = "red", lwd = 2.5)
-par(mfrow = c(1, 1))
-
-# PCA — replicates should group, conditions should separate
-plotPCA(vsd, intgroup = "condition")
-
-# sample-to-sample distances
-d <- dist(t(assay(vsd)))
-plot(hclust(d), labels = colnames(vsd), main = "Sample clustering", xlab = "", sub = "")
-
-# dispersion estimates — the model DESeq2 fitted
 plotDispEsts(dds)
 ```
 
-The PCA axes show percentages of variance; they do not add to 100% because there are
-as many components as samples minus one — PC1 and PC2 are simply the two directions
-capturing the most.
+**Read the plot:** each gene is positioned by its mean normalised count on the
+horizontal axis and its estimated dispersion on the vertical axis. Black points
+are the initial gene-wise estimates; the red curve is the fitted trend across
+genes; blue points are the final estimates after shrinkage. Some points overlap.
+Uncertain estimates are pulled towards the trend, while high-dispersion outliers
+are left unshrunk. This is a diagnostic of the dispersion estimates, not a test
+that proves the whole model is correct.
+
+*Questions:* What does a gene far above the red curve tell you? Does shrinkage
+always make an estimate smaller?
+
+::: {.callout-tip collapse="true" title="Discussion: dispersion"}
+A gene far above the trend has more variability around its modelled expectations
+than is typical at that expression level. This can reflect biological or technical
+variation; the plot alone cannot identify the cause. Shrinkage means moving
+towards the trend, so an estimate can move **up or down**. Extreme high-dispersion
+outliers are not pulled down to the trend, to avoid understating their variability.
+:::
+
+## 3.4 Variance stabilisation, PCA and sample distances
+
+We now change the question from **which genes differ?** to **how do the samples
+relate overall?** Raw RNA-seq counts are *heteroscedastic*: their variability
+depends on their mean, with highly expressed genes tending to vary more in
+absolute terms. For sample exploration, we use a **variance-stabilising
+transformation (VST)** to reduce this dependence. We use VST values for PCA and
+sample clustering in this exercise; DESeq2's differential-expression test still
+uses the original counts and its fitted count model.
+
+Work through the plots below **one at a time**. Describe each plot and answer its
+questions before moving on. In practice, sample exploration is an early quality
+check, before interpreting the final list of differentially expressed genes.
+
+### 3.4a Mean and standard deviation: what does VST change? {#sec-vst-mean-sd}
+
+First make a transformed copy of the data. `dds` retains the counts and fitted
+model; `vsd` stores the transformed data. `blind = FALSE` uses the experimental
+design when estimating the variance trend (or reuses the fitted trend). This is
+useful when many genes may differ between conditions: those differences should
+not all be treated as unexplained noise. It does **not** remove condition effects
+or force samples to cluster by condition.
+
+```r
+vsd <- vst(dds, blind = FALSE)
+```
+
+Compare a simple log transformation with VST. **Both panels account for
+library-size differences**: the left uses size-factor-normalised counts, and VST
+incorporates normalisation on the right. The left panel is already log-transformed;
+it is **not** a plot of untransformed raw counts. Adding 1 lets us take the log of
+counts that are zero.
+
+```r
+lc <- log2(counts(dds, normalized = TRUE) + 1)
+va <- assay(vsd)                         # extract the matrix of VST values
+
+par(mfrow = c(1, 2))
+plot(rowMeans(lc), apply(lc, 1, sd), pch = 20, cex = 0.3,
+     col = adjustcolor("grey30", 0.25),
+     xlab = "Mean log2(normalized count + 1)", ylab = "SD across all samples",
+     main = "log2(normalized count + 1)")
+lines(lowess(rowMeans(lc), apply(lc, 1, sd)), col = "red", lwd = 2.5)
+
+plot(rowMeans(va), apply(va, 1, sd), pch = 20, cex = 0.3,
+     col = adjustcolor("grey30", 0.25),
+     xlab = "Mean VST value", ylab = "SD across all samples", main = "VST")
+lines(lowess(rowMeans(va), apply(va, 1, sd)), col = "red", lwd = 2.5)
+par(mfrow = c(1, 1))
+```
+
+**Read the plots:**
+
+- Each grey dot represents **one gene**, not one sample.
+- The horizontal axis shows that gene's **average transformed expression across
+  all samples**. `rowMeans()` computes one mean per gene.
+- The vertical axis shows the **standard deviation (SD)** of those values across
+  all samples. `apply(..., 1, sd)` computes the SD along each gene row. A higher
+  point means greater sample-to-sample variation on that panel's expression scale.
+- The red line is a **smoothed trend**, made with `lowess()`. It summarises how SD
+  changes with mean expression; it is not the dispersion trend from §3.3.
+
+**Crucially, this SD includes all conditions together.** It combines variation
+within conditions and genuine expression differences between conditions. A gene
+that is consistently low in CON and consistently high in APP can therefore have a
+large overall SD even when its replicates agree very well. This SD is **neither
+the dispersion nor the standard error of the log2 fold change**.
+
+VST aims to reduce the dependence of variability on mean expression, **not to make
+all genes equally variable**. Look for regions where the red trend is approximately
+flat, and note where it still changes. A remaining rise, or genes with high SD,
+does not by itself mean VST failed: real differences between conditions remain in
+the data. A perfectly flat trend is not a requirement. Also check the axis scales:
+lower SD numbers after changing the expression scale are not, by themselves,
+proof of successful variance stabilisation. See the
+[DESeq2 explanation of transformation plots](https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#effects-of-transformations-on-the-variance).
+
+*Questions:*
+
+1. What does a gene high on either plot have in common with other high points?
+2. Is the red trend approximately flat across the whole expression range, or only
+   part of it? Describe what you actually see in both panels.
+3. Could a gene have consistent replicates within each condition but still have a
+   high SD here? Explain with an example.
+
+::: {.callout-tip collapse="true" title="Discussion: mean and SD"}
+1. Its transformed expression varies substantially across the samples. That could
+   reflect a condition difference, an unusual sample, or other variability; this
+   plot cannot distinguish those explanations for an individual gene.
+2. Report the shape rather than expecting a perfectly horizontal line. A flatter
+   region indicates less dependence of SD on mean in that region. If the trend
+   rises for highly expressed genes, the pooled SD may include strong condition
+   differences; the plot alone cannot establish their cause.
+3. Yes. Imagine transformed values near 6 for every CON replicate and near 10 for
+   every APP replicate. Within each group the SD is small, but across both groups
+   it is much larger. We want to retain that biological difference for PCA.
+:::
+
+### 3.4b PCA: which samples have similar expression profiles? {#sec-pca-check}
+
+PCA compresses many gene-expression measurements into a few summary coordinates.
+Here it uses the **500 genes with the greatest variance in their VST values**,
+not the 500 genes with the smallest differential-expression p-values.
+
+```r
+plotPCA(vsd, intgroup = "condition", ntop = 500) +
+  ggplot2::geom_text(ggplot2::aes(label = name), vjust = -0.6, size = 3)
+```
+
+**Read the plot:** each point is now **one sample**. Colour identifies its condition.
+The added `geom_text()` layer labels points with sample names.
+Samples close together have similar expression profiles in the displayed view;
+samples far apart differ along these principal components. The PCA calculation
+does not use condition labels to seek group separation; `intgroup` supplies the
+labels used to colour the points.
+
+PC1 captures the most sample-to-sample variation among the selected transformed
+genes; PC2 captures the most remaining variation in a perpendicular direction.
+Their percentages describe the shares of that variance captured by each axis,
+not the percentages of genes that change. They usually do not add to 100% because
+other PCs contain the remaining variation. With 12 samples there can be **at most
+11 non-zero PCs** after centring (also limited by the number of genes). Samples
+that overlap on PC1 and PC2 can still differ along other PCs.
+
+*Questions:*
+
+1. Do the three replicates of each condition lie close together? Is any sample
+   unexpectedly far from its own group?
+2. Which conditions appear most separated in this view? Must every condition form
+   a separate cluster?
+3. Add the percentages on PC1 and PC2. How much variance is not shown?
+
+::: {.callout-tip collapse="true" title="Discussion: PCA"}
+Use the sample labels and colours to describe your result; do not assume a desired
+pattern. Similar replicates are reassuring, but an isolated sample is a reason to
+check metadata, sequencing quality and possible batch effects, not to delete it
+automatically. Conditions with similar expression profiles may overlap: distinct
+clusters are not compulsory, and PCA is not a significance test. The unshown
+percentage is 100 minus the sum of the two displayed percentages. For IL, remember
+the infected-leaf sample preparation and smaller effective fungal libraries when
+considering possible explanations; the PCA alone cannot tell you what caused a
+separation.
+:::
+
+### 3.4c Sample distances: check the pattern another way {#sec-sample-clustering}
+
+We now cluster samples using **all retained genes' VST values**, rather than only
+the 500 genes used above. `t()` transposes the matrix so that samples become rows;
+`dist()` then calculates Euclidean distances between their expression profiles.
+`hclust()` groups similar samples into a tree (using complete linkage by default).
+
+```r
+d <- dist(t(assay(vsd)))
+plot(hclust(d), labels = colnames(vsd), main = "Sample clustering", xlab = "", sub = "")
+```
+
+**Read the tree:** each leaf is a sample. Branches joining at lower heights link
+more similar samples or clusters. Height measures the dissimilarity at which a
+merge occurs; it is not a p-value or a percentage. The left-to-right order of the
+leaves is not itself a distance scale. This clustering uses all VST dimensions,
+whereas the PCA picture shows only two components of a selected gene set, so the
+two displays need not agree perfectly.
+
+*Questions:* Do replicates cluster together? Does the main pattern agree with the
+PCA? If a sample looks unusual in both plots, what would you check before deciding
+whether it should be excluded?
+
+::: {.callout-tip collapse="true" title="Discussion: sample distances"}
+Look for replicates joining one another before they join other conditions, and
+describe any exceptions. Agreement between the PCA and tree supports the same
+broad sample relationships; disagreement can reflect the different gene sets and
+the additional dimensions used for clustering. Investigate unexpected samples
+using their labels, library sizes, mapping and QC metrics, and experimental
+records. Neither a branch nor a PCA position proves a sample is bad, and neither
+plot identifies which genes are significantly differentially expressed.
+:::
 
 ## 3.5 The results table
 
@@ -1393,7 +1561,7 @@ the organism changes:
 |---|---|
 | PCA of transformed values | [§3.4](#sec-de) |
 | Heatmap / clustering of sample distances | [§3.4](#sec-de) |
-| Prefilter + DESeq2 run, dispersion plot | [§3.1](#sec-de), [§3.4](#sec-de) |
+| Prefilter + DESeq2 run, dispersion plot | [§3.1](#sec-de), [§3.3 dispersion check](#sec-dispersion-check) |
 | Size factors, smallest library | [§3.3](#sec-de) |
 | Genes up in one condition | [§3.5](#sec-de)–[§3.7](#sec-de) |
 | Expression of one named gene across conditions | the *Your turn* in [§3.7](#sec-de) |
