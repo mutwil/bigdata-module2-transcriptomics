@@ -1255,25 +1255,40 @@ For example, a gene at **x = 1,000 and y = +2** has a mean normalised count of
 1,000 across all samples and an estimated **fourfold higher expression in APP
 than CON**. Its height is a fold change, not a p-value.
 
-**Why can the left side look like a fan?** Low-count genes provide less information,
-so their estimated fold changes can be very uncertain. Some extreme changes may
-also be real: this plot alone cannot distinguish them. Prefiltering and independent
-filtering limit the role of low-information genes in testing; they do **not**
-stabilise the fold-change estimates themselves. `lfcShrink()` is a separate method
-for making effect-size estimates more stable, introduced in §3.7.
+**What pattern do you see in this dataset?** Distinguish two features:
+
+- **The overall spread of fold changes:** the outer spread becomes broader towards
+  the middle and right, with very large estimated changes among moderately and
+  highly expressed genes. This spread describes differences **between genes'
+  estimated changes**, not the uncertainty of each individual estimate.
+- **The grey band around zero:** this generally becomes narrower as average counts
+  increase. Low-count genes can remain grey despite relatively large estimated
+  changes, whereas smaller changes can be red among genes with more informative
+  counts.
+
+More informative counts generally allow more precise estimates and detection of
+smaller changes, **when other factors are comparable**. Dispersion and the number
+of biological replicates also affect precision. Some low-count genes are grey
+because independent filtering leaves their `padj` unavailable. The colours show
+whether genes pass our selection criterion, **not how small their p-values are**.
+Remember that average counts include all four conditions, while the fold change
+compares APP with CON.
 
 *Questions:*
 
 1. What does a point below zero mean? Translate a log2 fold change of −2 into an
    APP-to-CON expression ratio.
-2. Are large estimated changes confined to low-count genes in your plot?
+2. How does the width of the grey band around zero change as average counts
+   increase? Why might a smaller fold change be significant for a higher-count gene?
 3. Can a point far above or below zero still be grey? What would that mean?
 
 ::: {.callout-tip collapse="true" title="Discussion: MA plot"}
 1. The gene is estimated to have lower expression in APP. A log2 fold change of
    −2 means APP expression is one quarter of CON expression.
-2. Describe your actual plot. A wider spread on the left is common, but it is not
-   a requirement and does not establish that every extreme estimate is unreliable.
+2. In this dataset the grey band generally narrows towards higher average counts.
+   With more informative counts, the estimated change can have a smaller standard
+   error, so a smaller fold change can be statistically significant. This is not
+   guaranteed for every gene: replicate variability and filtering also matter.
 3. Yes. A large estimated change is not necessarily supported by sufficient
    statistical evidence, or the gene may lack an adjusted p-value. Inspect its
    results and replicate counts before interpreting it biologically.
