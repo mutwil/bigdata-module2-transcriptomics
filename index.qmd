@@ -1214,21 +1214,147 @@ genes from the counts above; `NA` does not mean a gene is unchanged.
 
 ## 3.6 MA plot and volcano plot
 
-```r
-plotMA(res, ylim = c(-12, 12))
+These plots show the **APP versus CON results** from §3.5. Unlike the PCA, where a
+point represented a sample, **each point here represents one gene**. Neither plot
+uses the VST matrix: both use the fitted differential-expression results in `res`.
 
-# volcano, by hand
-sig <- significant                         # reuse the selection from §3.5
-plot(res$log2FoldChange, -log10(res$pvalue), pch = 20, cex = 0.35,
-     col = ifelse(sig, adjustcolor("#C44E52", 0.55), adjustcolor("grey40", 0.35)),
-     xlab = "log2 fold change (APP / CON)", ylab = "-log10(p-value)",
-     main = "Volcano plot", xlim = c(-12, 12))
-abline(v = c(-1, 1), lty = 2, col = "grey40")
+Run and discuss the MA plot first. Then run the volcano plot in the next code
+block. In RStudio, the arrows in the **Plots** pane let you return to earlier plots.
+
+### 3.6a MA plot: expression level versus expression change {#sec-ma-plot}
+
+An MA plot asks: **how large is the estimated change, and how abundant is the
+gene?** The name comes from *M*, a log expression ratio, and *A*, average abundance.
+
+```r
+par(mfrow = c(1, 1))                        # one plot at a time
+plotMA(res, ylim = c(-12, 12),
+       colSig = "#C44E52", colNonSig = "grey60",
+       main = "MA plot: APP versus CON",
+       xlab = "Mean normalized count across all samples")
+legend("topright", legend = c("Significant", "Not selected"),
+       col = c("#C44E52", "grey60"), pch = 16, bty = "n")
 ```
 
-Low-expression genes fan out on the left of the MA plot: with few reads the fold
-change is poorly determined — exactly why the prefilter and DESeq2's independent
-filtering exist.
+**Read the MA plot:**
+
+- **Horizontal axis:** `baseMean`, the mean size-factor-normalised count across
+  **all samples in `dds`**. Here that includes CON, APP, CIH and IL, not just APP
+  and CON. The axis is logarithmic, but its tick labels are counts: a value of
+  1,000 means a mean normalised count of 1,000.
+- **Vertical axis:** `log2FoldChange` for **APP / CON**. Above zero means higher
+  expression in APP; below zero means lower expression in APP. The horizontal
+  line at zero marks no estimated change.
+- **Red points:** genes selected as significant using the FDR cutoff already
+  stored in `res`. Grey points are not selected, including genes with missing
+  `padj`; grey does not prove there is no change.
+- **Triangles at the top or bottom:** estimated fold changes beyond the displayed
+  limits of −12 and +12. The limits change the display, not the analysis.
+
+For example, a gene at **x = 1,000 and y = +2** has a mean normalised count of
+1,000 across all samples and an estimated **fourfold higher expression in APP
+than CON**. Its height is a fold change, not a p-value.
+
+**Why can the left side look like a fan?** Low-count genes provide less information,
+so their estimated fold changes can be very uncertain. Some extreme changes may
+also be real: this plot alone cannot distinguish them. Prefiltering and independent
+filtering limit the role of low-information genes in testing; they do **not**
+stabilise the fold-change estimates themselves. `lfcShrink()` is a separate method
+for making effect-size estimates more stable, introduced in §3.7.
+
+*Questions:*
+
+1. What does a point below zero mean? Translate a log2 fold change of −2 into an
+   APP-to-CON expression ratio.
+2. Are large estimated changes confined to low-count genes in your plot?
+3. Can a point far above or below zero still be grey? What would that mean?
+
+::: {.callout-tip collapse="true" title="Discussion: MA plot"}
+1. The gene is estimated to have lower expression in APP. A log2 fold change of
+   −2 means APP expression is one quarter of CON expression.
+2. Describe your actual plot. A wider spread on the left is common, but it is not
+   a requirement and does not establish that every extreme estimate is unreliable.
+3. Yes. A large estimated change is not necessarily supported by sufficient
+   statistical evidence, or the gene may lack an adjusted p-value. Inspect its
+   results and replicate counts before interpreting it biologically.
+:::
+
+### 3.6b Volcano plot: expression change versus statistical evidence {#sec-volcano-plot}
+
+Now ask: **how large is the estimated change, and how strong is the statistical
+evidence?** The fold change moves to the horizontal axis; the vertical axis now
+describes the p-value.
+
+```r
+sig <- significant                         # reuse §3.5, without a new cutoff
+
+# Avoid an infinite plotting height if a tiny p-value was stored as zero
+p_for_plot <- pmax(res$pvalue, .Machine$double.xmin)
+
+par(mfrow = c(1, 1))
+plot(res$log2FoldChange, -log10(p_for_plot), pch = 20, cex = 0.35,
+     col = ifelse(sig, adjustcolor("#C44E52", 0.55), adjustcolor("grey40", 0.35)),
+     xlab = "log2 fold change (APP / CON)", ylab = "-log10(p-value)",
+     main = "Volcano plot: APP versus CON")
+abline(v = c(-1, 1), lty = 2, col = "grey40")
+legend("topright", legend = c("Significant", "Not selected"),
+       col = c("#C44E52", "grey40"), pch = 16, bty = "n")
+```
+
+**Read the volcano plot:**
+
+- **Horizontal axis:** the estimated log2 fold change. Right means higher in APP;
+  left means lower in APP. Further from zero means a larger estimated change.
+- **Vertical axis:** the negative base-10 logarithm of the **raw p-value**. A
+  smaller p-value gives a higher point, indicating stronger evidence against no
+  change under the model.
+- **Red points:** the same selection based on **adjusted p-values** from §3.5.
+  Height uses raw p-values; colour uses adjusted p-values. The two are not
+  interchangeable, so a point with a small raw p-value can still be grey.
+- **Dashed vertical lines at −1 and +1:** a twofold decrease or increase. These
+  are effect-size guides, **not significance cutoffs**. They do not change which
+  genes are coloured red. A significant gene can lie between them.
+
+| Raw p-value | −log10(p-value): height on the plot |
+|---|---|
+| 0.1 | 1 |
+| 0.01 | 2 |
+| 0.001 | 3 |
+| 0.0001 | 4 |
+
+For example, a point at **x = +2 and y = 3** means an estimated fourfold increase
+in APP and a raw p-value of 0.001. Check its colour or `padj` to see whether it
+passes our multiple-testing criterion. The height is **not** the probability that
+the gene has changed.
+
+**Read the R:** `ifelse(sig, ..., ...)` assigns the first colour to selected genes
+and the second colour to the others. `adjustcolor()` makes points partly
+transparent so overlapping genes are easier to see. `pmax()` takes the larger of
+each p-value and a tiny positive number, solely to keep plotting heights finite;
+it does not change `res` or our significance selection. Genes without a finite
+fold change or an available p-value cannot be placed on this plot.
+
+*Questions:*
+
+1. What does a gene in the upper-left part of the plot tell you?
+2. Could a gene near the centre be red? Could a gene far to the right be grey?
+3. Why is it not enough to select genes just because their raw p-value is small?
+
+::: {.callout-tip collapse="true" title="Discussion: volcano plot"}
+1. It has lower estimated expression in APP than CON and a small raw p-value.
+   Its adjusted p-value determines whether we report it as significant.
+2. Both are possible. A small change can be estimated precisely enough to be
+   significant, while a large estimate can be too uncertain to pass our selection
+   criterion (or have a missing adjusted p-value). Effect size and statistical
+   evidence answer different questions.
+3. We tested thousands of genes. Some small raw p-values occur by chance, so our
+   discovery list uses adjusted p-values. Consider the size of the change and its
+   biological context as well as statistical significance.
+:::
+
+**Take-home:** the MA plot relates **change to abundance**; the volcano plot
+relates **change to statistical evidence**. Neither replaces inspection of the
+individual samples for a gene of interest.
 
 ## 3.7 Annotate and save
 
