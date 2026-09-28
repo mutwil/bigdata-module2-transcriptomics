@@ -437,10 +437,41 @@ does not remove every possible type of contamination.
 | Setting | Meaning |
 |:--|:--|
 | `maxEE = c(2, 2)` | Allow at most 2 expected errors in each trimmed mate, separately (§1.2). |
-| `truncQ = 2` | Cut at the first base with Q ≤ 2. If this makes the read too short for `truncLen`, discard it. |
+| `truncQ = 2` | After removing the first 10 bases, cut before the first remaining base with Q ≤ 2, removing that base and everything after it. See the example below for how this interacts with `truncLen`. |
 | `minLen = 35` | Discard reads shorter than 35 bases after trimming. |
 | `compress = TRUE` | Save compressed `.fastq.gz` files. |
 | `multithread = FALSE` | Process sample files without parallel workers. |
+
+### How do `truncQ`, `truncLen` and `minLen` work together?
+
+**`truncLen` is both a trimming position and a length requirement.** With
+`truncLen = 125` for a reverse read, we keep sequence through original position
+125. If quality trimming leaves too little sequence to reach that position,
+the read is discarded — even if it is still longer than `minLen = 35`.
+
+Consider our **150-base reverse reads**, with `trimLeft = 10`, `truncLen = 125`
+and `truncQ = 2`. Positions below refer to the original read; the first 10 bases
+have already been removed before quality trimming.
+
+| First remaining base with Q ≤ 2 | What happens? |
+|:--|:--|
+| Position 100 | Quality trimming leaves positions 11–99: 89 bases. The read cannot reach position 125, so it is **discarded**. |
+| Position 140 | Quality trimming leaves positions 11–139. Enough sequence remains to keep positions 11–125: **115 bases**, provided the other filters pass. |
+| No such base | Keep positions 11–125: **115 bases**, provided the other filters pass. |
+
+So **not every quality-trimmed read is discarded**. A quality cut within the
+region we want to retain makes the read too short; a cut beyond it does not.
+If either mate fails, the whole read pair is discarded.
+
+**What does `minLen` add here?** It checks the final length after trimming.
+Our passing reads are already 140 bases forward and 115 bases reverse, so
+`minLen = 35` adds no further restriction with these settings.
+
+An alternative is `truncLen = 0`: this disables fixed-length truncation and its
+length requirement. Then `truncQ` can produce reads of different lengths, and
+`minLen` rejects those that become too short. **That is an alternative strategy,
+not a change to the settings we use below.** See the
+[DADA2 filtering implementation](https://github.com/benjjneb/dada2/blob/master/R/filter.R).
 
 ### Run the filter
 
@@ -454,7 +485,7 @@ out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
                      trimLeft   = 10,             # remove bases 1–10 from both mates
                      truncLen   = c(150, 125),    # original end positions: forward, reverse
                      maxEE      = c(2, 2),       # expected-error limits: forward, reverse
-                     truncQ     = 2,             # cut at the first base with Q <= 2
+                     truncQ     = 2,             # cut before the first remaining base with Q <= 2
                      minLen     = 35,            # minimum length after trimming
                      rm.phix    = TRUE,          # remove reads matching the PhiX control
                      compress   = TRUE,          # write compressed output files
