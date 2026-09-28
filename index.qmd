@@ -1165,31 +1165,89 @@ plot identifies which genes are significantly differentially expressed.
 
 ## 3.5 The results table
 
-```r
-res <- results(dds, contrast = c("condition", "APP", "CON"), alpha = 0.05)
-summary(res)
-head(res[order(res$padj), ])
+We want to compare **APP with CON**, using a false discovery rate (FDR) cutoff of
+**5%**. Define that cutoff once, so the results calculation and our gene counts use
+the same value.
 
-sum(res$padj < 0.05, na.rm = TRUE)                            # significant genes
-sum(res$padj < 0.05 & res$log2FoldChange > 0, na.rm = TRUE)   # up in APP
-sum(is.na(res$padj))                # removed by independent filtering — that is normal
+```r
+fdr_cutoff <- 0.05
+
+# Compare APP with CON and prepare the results table
+res <- results(dds,
+               contrast = c("condition", "APP", "CON"),
+               alpha = fdr_cutoff)
+
+summary(res)
+
+# Show the six genes with the smallest adjusted p-values
+head(res[order(res$padj), ])
 ```
 
-*Question:* re-run `results()` **without** `alpha = 0.05` (the default is 0.1). How
-many genes are significantly up-regulated now, and why does the number change?
+`contrast = c("condition", "APP", "CON")` specifies the metadata column, the
+condition of interest, and the reference condition. A positive `log2FoldChange`
+means higher expression in **APP**; a negative value means higher expression in
+**CON**.
+
+**Why do we use the cutoff more than once?** These are different tasks, not
+repeated rounds of multiple-testing correction:
+
+- `alpha = fdr_cutoff` tells DESeq2 our intended FDR threshold. It uses that target
+  to optimise **independent filtering** of low-information genes. It does **not**
+  return only significant genes: `res` still contains significant and
+  non-significant rows, and some rows without an available adjusted p-value.
+- `summary(res)` reports an overview using that same target by default.
+- Comparing `padj` with the cutoff below identifies which genes we actually call
+  significant. We can then count all of them, or only those changing in one
+  direction.
+
+```r
+# TRUE for genes with an available adjusted p-value below our cutoff
+significant <- !is.na(res$padj) & res$padj < fdr_cutoff
+
+sum(significant)                            # all significant genes
+sum(significant & res$log2FoldChange > 0)    # significant, higher in APP
+sum(significant & res$log2FoldChange < 0)    # significant, lower in APP
+
+sum(is.na(res$padj))                        # genes without an adjusted p-value
+```
+
+**Read the R:** `res$padj` selects the adjusted p-value column. `is.na()` checks for
+missing values; `!` means "not", so `!is.na(res$padj)` checks that a value is
+available. `&` means both conditions must hold. The resulting `significant` vector
+contains `TRUE` or `FALSE` for each gene. `sum()` counts the `TRUE` entries because
+R treats `TRUE` as 1 and `FALSE` as 0.
+
+A missing `padj` is **not always caused by independent filtering**. Count outliers
+or all-zero genes can also cause missing results (although all-zero rows were
+already removed by our prefilter). These rows are excluded from our significance
+counts; a missing value is not evidence that a gene is unchanged. See the
+[DESeq2 results documentation](https://bioconductor.org/packages/release/bioc/manuals/DESeq2/man/DESeq2.pdf).
+
+*Question:* repeat the comparison using a **10% FDR target** for both `results()`
+and gene selection. How many genes are significantly **higher in APP** now?
+Compare with the 5% result. Keep the original `res` and `fdr_cutoff` unchanged for
+the following sections.
 
 ::: {.callout-tip collapse="true" title="Answer"}
 ```r
-res10 <- results(dds, contrast = c("condition", "APP", "CON"))   # default alpha = 0.1
+fdr_cutoff10 <- 0.10
+res10 <- results(dds, contrast = c("condition", "APP", "CON"),
+                 alpha = fdr_cutoff10)
 summary(res10)
-sum(res10$padj < 0.1, na.rm = TRUE)
+
+significant10 <- !is.na(res10$padj) & res10$padj < fdr_cutoff10
+
+c(up_APP_FDR_5pct  = sum(significant & res$log2FoldChange > 0),
+  up_APP_FDR_10pct = sum(significant10 & res10$log2FoldChange > 0))
 ```
-More genes pass. Two things moved at once: the reporting threshold itself
-(padj < 0.1 instead of < 0.05), and DESeq2's **independent filtering**, which is
-optimised *for the alpha you declare* — so even the padj values themselves can
-differ slightly between the two runs. The practical lesson: `alpha` is part of your
-method, so state it in your report, and set it to the threshold you actually intend
-to use.
+The 10% threshold is more permissive, so we generally expect more discoveries.
+Report the actual counts you obtain. Two things change here: the selection cutoff
+and the target used to optimise independent filtering. The filtered set, and hence
+some adjusted p-values, can therefore differ between the two runs. Changing only
+`alpha` would **not** automatically change a separate expression such as
+`res$padj < 0.05`. The default `alpha` in `results()` is 0.1, but specifying it
+explicitly makes our intention clear. State your FDR target in your report and use
+it consistently when selecting genes.
 :::
 
 ## 3.6 MA plot and volcano plot
@@ -1198,7 +1256,7 @@ to use.
 plotMA(res, ylim = c(-12, 12))
 
 # volcano, by hand
-sig <- !is.na(res$padj) & res$padj < 0.05
+sig <- !is.na(res$padj) & res$padj < fdr_cutoff
 plot(res$log2FoldChange, -log10(res$pvalue), pch = 20, cex = 0.35,
      col = ifelse(sig, adjustcolor("#C44E52", 0.55), adjustcolor("grey40", 0.35)),
      xlab = "log2 fold change (APP / CON)", ylab = "-log10(p-value)",
@@ -1217,7 +1275,7 @@ annot <- read.delim("~/work/module2/C_fructicola_counts/GSE103878_1104_genes_ann
 out   <- merge(as.data.frame(res), annot, by.x = "row.names", by.y = "ID", all.x = TRUE)
 
 # the 10 most strongly up-regulated genes in appressoria, with their function
-up <- out[!is.na(out$padj) & out$padj < 0.05 & out$log2FoldChange > 0, ]
+up <- out[!is.na(out$padj) & out$padj < fdr_cutoff & out$log2FoldChange > 0, ]
 head(up[order(-up$log2FoldChange), c("Row.names", "log2FoldChange", "padj", "Annotation")], 10)
 
 write.csv(out, "~/work/module2/DE_APP_vs_CON.csv")   # saved under ~/work = kept
