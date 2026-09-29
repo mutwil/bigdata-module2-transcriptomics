@@ -1814,29 +1814,95 @@ what this data honestly gives.
 
 ## 4.6 How much does the threshold matter?
 
+In §4.1 we selected genes with **log2 fold change > 2**: more than four times
+higher expression in APP than CON. What happens if we ask for a smaller or larger
+change instead?
+
+We will change **one number** and repeat the P450 test from §4.2. The background,
+the P450 gene set, and the 5% FDR cutoff for selecting genes all stay the same.
+**No new statistical method or loops are needed.**
+
+### 1. Choose a cutoff and make a new gene list
+
+| log2 fold-change cutoff | Keep genes with expression in APP… |
+|:--|:--|
+| `1` | more than 2 times that in CON |
+| `2` | more than 4 times that in CON |
+| `3` | more than 8 times that in CON |
+
 ```r
-for (lfc in c(1, 2, 3)) {
-  dg <- rownames(res)[!is.na(res$padj) & res$padj < 0.05 & res$log2FoldChange > lfc]
-  out <- data.frame()
-  for (tm in unique(gene_sets$term_name)) {
-    sg <- gene_sets$gene[gene_sets$term_name == tm]
-    K  <- sum(sg %in% universe); k <- sum(dg %in% sg)
-    if (K < 5) next
-    out <- rbind(out, data.frame(term = tm,
-                 p = phyper(k - 1, K, N - K, length(dg), lower.tail = FALSE)))
-  }
-  out <- out[order(out$p), ]
-  cat(sprintf("log2FC > %d (%5d genes): best raw p = %.3f | top 3: %s\n",
-              lfc, length(dg), min(out$p), paste(head(out$term, 3), collapse = " | ")))
-}
+# Start with 1. Later, change only this number to 2, then 3.
+lfc_cutoff <- 1
+
+# Keep genes with an available adjusted p-value below our 5% FDR cutoff
+passes_fdr <- !is.na(res$padj) & res$padj < fdr_cutoff
+
+# Which genes have an expression increase larger than our chosen cutoff?
+passes_change <- res$log2FoldChange > lfc_cutoff
+
+# & means BOTH conditions must be met; take the IDs of those genes
+selected_genes <- rownames(res)[passes_fdr & passes_change]
+
+# Count all selected genes, and then the P450 genes among them
+selected_size <- length(selected_genes)
+selected_overlap <- sum(selected_genes %in% p450_genes)
+
+selected_size
+selected_overlap
 ```
 
-The ranking reshuffles as the threshold moves — a different cut-off would have given
-you a different "top hit" to write about. This is exactly the lecture's argument for
-**whole-distribution methods**: GSEA ranks *every* gene and asks where a set's
-members fall in that ranking, with no threshold at all. With curated annotation you
-would run it with `fgsea` or `clusterProfiler`; for this genome, GO or PFAM terms
-would first have to come from InterProScan or eggNOG-mapper.
+`p450_genes` was created in §4.2. We use a new name, `selected_genes`, so the
+original `de_genes` list is not changed. If `selected_size` is zero, there are no
+genes to test at that cutoff; record that and skip the next block.
+
+### 2. Repeat the same enrichment test
+
+This is the same calculation as before. Only the **selected-list size** and its
+**P450 overlap** change; `set_size` and `other_size` still describe the background
+from §4.2.
+
+```r
+threshold_pvalue <- phyper(
+  q = selected_overlap - 1,  # this many P450 genes or more
+  m = set_size,              # P450 genes in the unchanged background
+  n = other_size,            # other genes in the unchanged background
+  k = selected_size,         # number of genes in our new selected list
+  lower.tail = FALSE
+)
+
+threshold_pvalue
+```
+
+### 3. Change one number and compare
+
+Write down your results below. Change `lfc_cutoff <- 1` to `lfc_cutoff <- 2` and
+**rerun both code blocks**, then repeat with `3`. You do not need to refit DESeq2.
+
+| log2 fold-change cutoff | Selected genes | Selected P450 genes | P450 p-value |
+|:--|:--|:--|:--|
+| 1 | | | |
+| 2 | | | |
+| 3 | | | |
+
+*Discuss:* does a stricter cutoff leave fewer genes? Does it always produce a
+smaller enrichment p-value?
+
+::: {.callout-tip collapse="true" title="Discussion"}
+A stricter cutoff keeps the same number or fewer genes: it cannot add new ones.
+However, the enrichment p-value can increase or decrease. It depends on how many
+P450 genes remain **relative to the size of the selected list**, not simply on
+how strict the cutoff is. The results may remain non-significant at all three
+cutoffs; report what you observe rather than expecting a particular pattern.
+
+This is a sensitivity check, not a search for whichever cutoff gives the smallest
+p-value. These are raw p-values for one category at three cutoffs, not
+multiple-testing-adjusted discoveries.
+:::
+
+**Connection to GSEA:** threshold-based enrichment depends on which genes make
+it onto our selected list. GSEA instead uses a ranked list without first applying
+a significance or fold-change cutoff to select genes. Explore that difference
+with the [GSEA simulator in the appendix](#sec-gsea-simulator).
 
 ## 4.7 Clustering expression profiles
 
