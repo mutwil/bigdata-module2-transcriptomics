@@ -1453,43 +1453,69 @@ You now have thousands of significant genes, which is not an answer to a biologi
 question. Enrichment analysis turns that list into statements about **function**.
 The enrichment tests and clustering use base R — `phyper`, `fisher.test`,
 `p.adjust`, `kmeans` — with the DESeq2 results and transformed expression values
-you prepared in Session 3.
+from Session 3. The setup below recreates those objects in a fresh R session.
 
 ::: {.run-local}
-**One extra file.** The functional categories for this genome are in
-`gene_sets.csv`. Fetch it straight into `module2` from the R console:
+**Start here after restarting R.** Run this entire block, from top to bottom,
+before §4.1. It does not require any R objects from an earlier session. It reloads
+the counts, repeats the Session 3 model fit, and creates both the results table
+for enrichment and the transformed expression values for clustering.
 
-```r
-download.file("https://mutwil.github.io/bigdata-module2-transcriptomics/data/gene_sets.csv",
-              "~/work/module2/gene_sets.csv")
-```
-
-(It is also fine to download it in a browser from that address and upload it.)
-
-**Prepare the results table before starting §4.1.** `res` is the APP-versus-CON
-results table introduced in §3.5. It is an R object, not a file that loads
-automatically when you open RStudio. Run the following in your R console to
-create it from the **fitted** DESeq2 object `dds`:
+**Required file:** the count table from `C_fructicola_counts.zip` must be at
+`~/work/module2/C_fructicola_counts/GSE103878_1104.genes.count.txt`. If it is
+missing, upload and unpack that zip from Absalon into `~/work/module2` first.
+The extra annotation file, `gene_sets.csv`, is downloaded below if needed.
 
 ```r
 library(DESeq2)
 
+# 1. Check the count file and fetch the gene-set annotations if needed
+count_file <- "~/work/module2/C_fructicola_counts/GSE103878_1104.genes.count.txt"
+if (!file.exists(count_file)) {
+  stop("Count file missing: upload and unpack C_fructicola_counts.zip into ~/work/module2, then rerun this setup.")
+}
+if (!file.exists("~/work/module2/gene_sets.csv")) {
+  download.file("https://mutwil.github.io/bigdata-module2-transcriptomics/data/gene_sets.csv",
+                "~/work/module2/gene_sets.csv")
+}
+
+# 2. Read the counts and identify the condition of each sample
+countdata <- read.delim(count_file, row.names = 1)
+coldata <- data.frame(
+  row.names = colnames(countdata),
+  condition = factor(sub("[0-9]+$", "", colnames(countdata)))
+)
+
+# 3. Rebuild and fit the same DESeq2 model used in Session 3
+dds <- DESeqDataSetFromMatrix(countData = countdata,
+                              colData   = coldata,
+                              design    = ~ condition)
+dds <- dds[rowSums(counts(dds)) >= 10, ]
+dds <- DESeq(dds)
+
+# 4. Create the APP-versus-CON results table for enrichment
 fdr_cutoff <- 0.05
 res <- results(dds,
                contrast = c("condition", "APP", "CON"),
                alpha = fdr_cutoff)
+
+# 5. Create the transformed expression values needed for clustering in §4.7
+vsd <- vst(dds, blind = FALSE)
+
+# 6. Check that the setup finished successfully
+head(res)
+dim(assay(vsd))
 ```
 
-**If `dds` is not defined, or you have restarted R:** return to
-[Session 3](#sec-de), run **§3.1** to load the count table and create `dds`, then
-run **`dds <- DESeq(dds)` from §3.3** to fit the model. Finally, run the setup
-block above. Creating `dds` alone is not enough: `results()` needs the fitted
-model. Your data files remain in `~/work/module2`, but R objects may need to be
-recreated after a restart.
+**Wait for the whole block to finish before continuing.** `DESeq()` prints
+progress messages while fitting the model. At the end, you should see the first
+rows of `res` and the dimensions of the transformed matrix (genes × 12 samples).
+If you see an error, resolve that first rather than proceeding to §4.1.
 
-**For the clustering exercise (§4.7),** you will also need `coldata` from §3.1
-and `vsd <- vst(dds, blind = FALSE)` from §3.4. If you restarted R, recreate
-these before running that exercise.
+You now have `coldata` (sample conditions), `dds` (the fitted model), `res`
+(APP-versus-CON results), `fdr_cutoff` (the 5% FDR target), and `vsd` (transformed
+expression values for clustering). Your files persist under `~/work/module2`;
+rerun this setup whenever you restart R. **No need to return to Session 3.**
 :::
 
 ## 4.1 The gene list, the universe, and the sets
