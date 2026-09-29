@@ -1451,8 +1451,9 @@ annot$Annotation[annot$ID == top_gene]
 
 You now have thousands of significant genes, which is not an answer to a biological
 question. Enrichment analysis turns that list into statements about **function**.
-This whole session is base R — `phyper`, `fisher.test`, `p.adjust`, `kmeans` — run
-on the objects you built in Session 3.
+The enrichment tests and clustering use base R — `phyper`, `fisher.test`,
+`p.adjust`, `kmeans` — with the DESeq2 results and transformed expression values
+you prepared in Session 3.
 
 ::: {.run-local}
 **One extra file.** The functional categories for this genome are in
@@ -1464,6 +1465,31 @@ download.file("https://mutwil.github.io/bigdata-module2-transcriptomics/data/gen
 ```
 
 (It is also fine to download it in a browser from that address and upload it.)
+
+**Prepare the results table before starting §4.1.** `res` is the APP-versus-CON
+results table introduced in §3.5. It is an R object, not a file that loads
+automatically when you open RStudio. Run the following in your R console to
+create it from the **fitted** DESeq2 object `dds`:
+
+```r
+library(DESeq2)
+
+fdr_cutoff <- 0.05
+res <- results(dds,
+               contrast = c("condition", "APP", "CON"),
+               alpha = fdr_cutoff)
+```
+
+**If `dds` is not defined, or you have restarted R:** return to
+[Session 3](#sec-de), run **§3.1** to load the count table and create `dds`, then
+run **`dds <- DESeq(dds)` from §3.3** to fit the model. Finally, run the setup
+block above. Creating `dds` alone is not enough: `results()` needs the fitted
+model. Your data files remain in `~/work/module2`, but R objects may need to be
+recreated after a restart.
+
+**For the clustering exercise (§4.7),** you will also need `coldata` from §3.1
+and `vsd <- vst(dds, blind = FALSE)` from §3.4. If you restarted R, recreate
+these before running that exercise.
 :::
 
 ## 4.1 The gene list, the universe, and the sets
@@ -1473,8 +1499,8 @@ gene_sets <- read.csv("~/work/module2/gene_sets.csv")
 head(gene_sets, 3)
 sort(table(gene_sets$term_name), decreasing = TRUE)
 
-universe <- rownames(res)[!is.na(res$padj)]    # every gene actually tested
-de_genes <- rownames(res)[!is.na(res$padj) & res$padj < 0.05 & res$log2FoldChange > 2]
+universe <- rownames(res)[!is.na(res$padj)]    # genes with an available adjusted p-value
+de_genes <- rownames(res)[!is.na(res$padj) & res$padj < fdr_cutoff & res$log2FoldChange > 2]
 length(universe); length(de_genes)
 ```
 
