@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GSEA: walk the ranked gene list</title>
+<style>
+:root{color-scheme:light;--ink:#182b39;--muted:#526575;--teal:#14786e;--orange:#e58a24;--blue:#4278ad;--line:#dbe3e7}
+*{box-sizing:border-box}body{margin:0;background:#f3f6f8;color:var(--ink);font:16px/1.5 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:28px 22px 44px}h1{font-size:clamp(28px,4vw,42px);line-height:1.15;margin:8px 0 12px}h2{font-size:21px;margin:0 0 10px}p{margin:8px 0 14px}.eyebrow{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);font-weight:750}.intro{color:var(--muted);max-width:940px}.panel{background:white;border:1px solid var(--line);border-radius:15px;padding:22px;margin-top:18px}.controls{display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px}label{display:block;font-size:14px;font-weight:650}input,select{display:block;width:100%;padding:9px;margin-top:6px;font:inherit;background:white;color:var(--ink);border:1px solid #8b9daa;border-radius:7px}.buttons{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}button{border:0;border-radius:8px;background:var(--teal);color:white;padding:10px 14px;font:600 14px system-ui;cursor:pointer}button.secondary{background:#e7efef;color:#185e58}button:disabled{opacity:.5;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #246dc7;outline-offset:3px}.small{font-size:14px;color:var(--muted)}.error{color:#a52525}.strip{display:grid;gap:5px;grid-template-columns:repeat(20,1fr);margin:12px 0}.gene{padding:7px 0;background:#354958;color:white;border:2px solid transparent;font-size:12px;border-radius:5px}.gene.member{background:var(--orange);color:#231a0a}.gene.current{border-color:#121e29;box-shadow:0 0 0 2px white inset}.gene.past{opacity:.55}.ends{display:flex;justify-content:space-between;gap:16px;font-size:13px;color:var(--muted)}.legend{display:flex;flex-wrap:wrap;gap:15px;font-size:13px;color:var(--muted)}.key{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;background:#354958}.key.member{background:var(--orange)}.key.same{background:var(--blue)}.key.other{background:#bdc9d2}.chart{width:100%;height:auto;display:block}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:15px 0}.stat{padding:14px;background:#edf5f3;border-radius:10px;font-size:14px}.stat strong{font-size:25px;display:block}.stat span{color:var(--muted);font-size:13px}.note{border-left:4px solid var(--orange);padding-left:13px}.columns{display:grid;grid-template-columns:1.1fr 1fr;gap:18px}.columns>.panel{min-width:0}.tiles{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin:14px 0;max-height:245px;overflow:auto}.tile{font-size:11px;padding:7px 0;border-radius:4px;background:#bdc9d2;color:#243642;border:2px solid transparent}.tile.same{background:var(--blue);color:white}.tile.extreme{background:var(--orange);color:#231a0a}.tile.selected{border-color:#172d3c}details{font-size:14px;margin-top:16px;color:var(--muted)}summary{cursor:pointer;font-weight:650}footer{font-size:13px;color:var(--muted);margin-top:20px}code{font-size:.95em}#walkDetail{min-height:48px}#error:empty{display:none}@media(max-width:780px){.columns{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.controls label:last-child{grid-column:1/-1}.strip{grid-template-columns:repeat(10,1fr)}}@media(max-width:440px){main{padding:18px 12px}.panel{padding:16px}.stats{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(8,1fr)}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">Transcriptomics · gene set enrichment analysis</div>
+<h1>GSEA: walk the ranked gene list</h1>
+<p class="intro">Are the members of a functional group concentrated towards one end of a ranked gene list? Build a running score, then compare it with random gene sets. Unlike threshold-based enrichment, <strong>we keep the full ranked list</strong>—there is no significant-gene cutoff.</p>
+<section class="panel">
+<h2>1. Arrange the gene-set members</h2>
+<div class="controls">
+<label>Ranked genes · N (even, 6–80)<input id="N" type="number" min="6" max="80" step="2" value="20"></label>
+<label>Gene-set members · K<input id="K" type="number" min="1" max="79" step="1" value="4"></label>
+<label>Scoring method<select id="weight"><option value="0">Unweighted: equal upward steps</option><option value="1">Weighted: stronger ranking statistics give larger steps</option></select></label>
+</div>
+<div class="buttons"><button class="secondary preset" data-pattern="beginning">Beginning</button><button class="secondary preset" data-pattern="middle">Middle</button><button class="secondary preset" data-pattern="end">End</button><button class="secondary preset" data-pattern="spread">Spread out</button><button class="secondary preset" data-pattern="random">Random positions</button></div>
+<p class="small">Click a gene to toggle membership. Orange = in the gene set; dark = not in the gene set. The gene's rank stays fixed. Clicking changes K and clears the previous simulations.</p>
+<div class="ends"><span>Beginning: positive ranking statistic<br>Higher in APP relative to CON</span><span>End: negative ranking statistic<br>Lower in APP relative to CON</span></div>
+<div id="strip" class="strip" aria-label="Ranked genes: click to toggle membership"></div>
+<p id="error" class="error" role="alert"></p>
+<p class="small">These are synthetic ranks, not the course data. The ranking statistic decreases evenly from +3 to −3; hover over a gene to see its value. We use an even N so no synthetic statistic is exactly zero. In a real analysis the statistic could be the DESeq2 Wald statistic. <strong>Orange indicates membership, not upregulation.</strong></p>
+</section>
+<section class="panel">
+<h2>2. Follow the running score</h2>
+<p id="rule"></p>
+<div class="buttons"><button id="step">Next gene</button><button id="walk" class="secondary">Animate the walk</button><button id="show" class="secondary">Show full curve</button><button id="rewind" class="secondary">Back to start</button><button id="stop" class="secondary" hidden>Stop animation</button></div>
+<p id="walkDetail" class="note" aria-live="polite"></p>
+<svg id="curve" class="chart" viewBox="0 0 1000 360" role="img" aria-label="Running enrichment score along the ranked gene list"></svg>
+<div class="stats"><div class="stat">Highest running score<strong id="positive"></strong><span id="positiveRank"></span></div><div class="stat">Lowest running score<strong id="negative"></strong><span id="negativeRank"></span></div><div class="stat">Final enrichment score · ES<strong id="ES"></strong><span id="direction"></span></div></div>
+<p id="interpretation" class="note"></p>
+<p class="small">The line always ends at zero: upward steps add to +1, downward steps add to −1. <strong>The ES is not the endpoint.</strong> It is the excursion furthest from zero, keeping its sign. A non-member always moves the curve down, but need not make it negative.</p>
+</section>
+<section class="panel">
+<h2>3. Would random gene sets give a score this extreme?</h2>
+<p>Keep the ranked list and K fixed. Randomly choose K different positions as gene-set members and recalculate the ES. Repeat to make a <strong>null distribution</strong>. This models preranked gene-set randomisation, not shuffling treatment labels.</p>
+<div class="controls">
+<label>Random gene sets<select id="reps"><option value="100">100</option><option value="1000">1,000</option></select></label>
+<label style="grid-column:span 2">Which comparison?<select id="test"><option value="directional">GSEA-style: compare scores of the same sign</option><option value="absolute">Teaching alternative: either end, compare |ES|</option></select></label>
+</div>
+<div class="buttons"><button id="run">Generate random gene sets</button><button id="animateNull" class="secondary">Animate random gene sets</button></div>
+<p id="testExplanation" class="small"></p>
+<div class="stats"><div class="stat">Random sets generated<strong id="completed">0</strong><span id="progress">Choose a simulation above.</span></div><div class="stat">Extreme / eligible random scores<strong id="fraction">—</strong><span id="denominator"></span></div><div class="stat">Estimated p-value<strong id="pvalue">—</strong><span>One gene set; not FDR-adjusted.</span></div></div>
+<p id="pNote" class="note" aria-live="polite"></p>
+<div class="legend"><span><i class="key member"></i>At least as extreme</span><span><i class="key same"></i>Eligible but less extreme</span><span><i class="key other"></i>Opposite sign: excluded from denominator</span></div>
+<svg id="histogram" class="chart" viewBox="0 0 1000 290" role="img" aria-label="Distribution of random enrichment scores"></svg>
+<p class="small">The dashed line marks the observed ES (or |ES|). Click a tile to overlay that random set's curve as a dashed purple line in section 2. The solid teal curve remains your observed set.</p>
+<div id="tiles" class="tiles" aria-label="Simulated scores"></div>
+<p id="randomDetail" class="small"></p>
+</section>
+<section class="panel">
+<h2>Try these three patterns</h2>
+<p><strong>Beginning:</strong> members occur first, producing a positive peak. <strong>End:</strong> non-members occur first, producing a negative trough. <strong>Middle:</strong> the curve first falls, then rises, then falls again. With a symmetric arrangement, the positive and negative excursions tie—there is no unique direction.</p>
+<p><strong>A score is not a p-value.</strong> Its significance depends on what the randomisations produce. Repeating 100 random sets changes the estimate; 1,000 usually makes it more stable. No extreme random scores does not mean the true probability is zero.</p>
+<details><summary>Scoring, ties and the scope of this simulator</summary>
+<p>Unweighted scoring: a member adds 1/K; a non-member subtracts 1/(N − K). Weighted scoring (exponent 1): a member adds |its ranking statistic| divided by the sum of |ranking statistics| over all members. Misses still subtract 1/(N − K). All weighted hits being zero makes the weighted score undefined; use unweighted scoring in that case.</p>
+<p>For positive observed ES, the GSEA-style estimate is the fraction of non-negative null scores at least as large as the observed ES. For negative observed ES, it is the fraction of negative null scores at least as negative. This is a raw Monte Carlo fraction, not a plus-one-corrected estimate; small estimates based on few randomisations are unreliable.</p>
+<p>Equal positive and negative excursions are explicitly shown as a tie (tolerance 10⁻¹⁰). We do not give a directional p-value for a tied observation. Choose the either-end comparison to test its maximum absolute deviation instead. For null-score sign bookkeeping, tied null curves use the negative excursion consistently. This convention is arbitrary and is not biological evidence of a direction.</p>
+<p>The either-end comparison uses all randomisations and |ES|. It is an additional teaching test, <strong>not the standard GSEA nominal p-value</strong>. Random sets preserve K but do not preserve biological gene–gene correlations. Full GSEA can instead permute sample labels. This simulator does not calculate a normalised enrichment score (NES), FDR, or pathway activation.</p>
+</details>
+</section>
+<footer>Standalone teaching simulator · No installation, uploads or network connection needed. Method references: <a href="https://docs.gsea-msigdb.org/GSEA/GSEA_User_Guide/">GSEA user guide</a> and <a href="https://github.com/GSEA-MSigDB/GSEA_R">GSEA reference R implementation</a>.</footer>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), EPS=1e-10;
+const num=x=>Math.abs(x)<EPS?'0':Number(x.toFixed(3)).toString();
+const signed=x=>(x>EPS?'+':'')+num(x);
+let N=20, members=new Set([0,1,2,3]), observed, walk=0, simulations=[], selected=-1, timer=null, pattern='beginning';
+function validSettings(){const n=Number($('N').value),k=Number($('K').value);return Number.isInteger(n)&&n>=6&&n<=80&&n%2===0&&Number.isInteger(k)&&k>=1&&k<n;}
+function calculate(N,members,weighted=false){
+  const K=members.size;if(K<1||K>=N)throw Error('Keep at least one member and one non-member.');
+  const ranks=Array.from({length:N},(_,i)=>3-6*i/(N-1));
+  const total=Array.from(members).reduce((s,i)=>s+Math.abs(ranks[i]),0);
+  if(weighted&&total<EPS)throw Error('All member ranking statistics are zero. Weighted ES is undefined; choose unweighted scoring.');
+  const deltas=ranks.map((r,i)=>members.has(i)?(weighted?Math.abs(r)/total:1/K):-1/(N-K));
+  const path=[0];for(const d of deltas)path.push(path[path.length-1]+d);path[N]=0;
+  const max=Math.max(...path),min=Math.min(...path),tie=Math.abs(max+min)<EPS;
+  const es=max>-min+EPS?max:min;
+  return {path,deltas,ranks,max,min,tie,es,magnitude:Math.max(max,-min),peak:path.indexOf(max),trough:path.indexOf(min)};
+}
+function randomSet(N,K,random=Math.random){
+  const set=new Set();for(let j=N-K;j<N;j++){const t=Math.floor(random()*(j+1));set.add(set.has(t)?j:t);}return set;
+}
+function stop(){if(timer!==null)clearInterval(timer);timer=null;$('stop').hidden=true;}
+function clearNull(){simulations=[];selected=-1;}
+function recalculate(){
+  stop();clearNull();walk=0;$('error').textContent='';
+  try{if(!validSettings())throw Error('Use an even N from 6 to 80 and between 1 and N − 1 members.');observed=calculate(N,members,$('weight').value==='1');}catch(e){observed=null;$('error').textContent=e.message;}
+  render();
+}
+function configure(nextPattern=pattern){
+  stop();const nextN=Number($('N').value),K=Number($('K').value);
+  if(!validSettings()){
+    observed=null;clearNull();$('error').textContent='Use an even N from 6 to 80 and between 1 and N − 1 members.';render();return;
+  }
+  N=nextN;pattern=nextPattern;
+  const start=pattern==='end'?N-K:pattern==='middle'?Math.floor((N-K)/2):0;
+  members=pattern==='random'?randomSet(N,K):pattern==='spread'?new Set(Array.from({length:K},(_,i)=>Math.floor((i+.5)*N/K))):new Set(Array.from({length:K},(_,i)=>start+i));
+  recalculate();
+}
+function classify(d){
+  const absolute=$('test').value==='absolute';
+  if(absolute)return {eligible:true,extreme:d.magnitude>=observed.magnitude-EPS};
+  if(observed.tie)return {eligible:false,extreme:false};
+  const eligible=observed.es>=0?d.es>=0:d.es<0;
+  return {eligible,extreme:eligible&&(observed.es>=0?d.es>=observed.es-EPS:d.es<=observed.es+EPS)};
+}
+function render(){
+  const valid=!!observed;
+  for(const id of ['run','animateNull','step','walk','show','rewind'])$(id).disabled=!valid;
+  $('strip').replaceChildren();$('tiles').replaceChildren();$('randomDetail').textContent='';
+  if(!valid){
+    for(const id of ['rule','walkDetail','positiveRank','negativeRank','direction','interpretation','testExplanation','denominator','progress','pNote'])$(id).textContent='';
+    for(const id of ['positive','negative','ES','fraction','pvalue'])$(id).textContent='—';
+    $('completed').textContent='0';$('curve').replaceChildren();$('histogram').replaceChildren();return;
+  }
+  const K=members.size,weighted=$('weight').value==='1';
+  for(let i=0;i<N;i++){
+    const b=document.createElement('button');b.textContent=i+1;b.className='gene'+(members.has(i)?' member':'')+(i===walk-1?' current':'')+(i<walk-1?' past':'');
+    b.title=`Rank ${i+1}; statistic ${signed(observed.ranks[i])}; ${members.has(i)?'member':'non-member'}`;b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',String(members.has(i)));
+    b.onclick=()=>{stop();if((members.has(i)&&members.size===1)||(!members.has(i)&&members.size===N-1)){$('error').textContent='Keep at least one member and one non-member.';return;}members.has(i)?members.delete(i):members.add(i);$('K').value=members.size;pattern='custom';recalculate();};$('strip').append(b);
+  }
+  $('rule').textContent=weighted?`Start at 0. A member adds its absolute ranking statistic divided by the total absolute statistic of all ${K} members. Each non-member subtracts 1 / ${N-K} = ${num(1/(N-K))}.`:`Start at 0. Each member adds 1 / ${K} = ${num(1/K)}. Each non-member subtracts 1 / ${N-K} = ${num(1/(N-K))}.`;
+  $('walkDetail').textContent=walk===0?'At the start: running score = 0. Click “Next gene” to take one step.':`Rank ${walk}: ${members.has(walk-1)?'member → move up':'non-member → move down'}. ${signed(observed.path[walk-1])} ${observed.deltas[walk-1]>=0?'+':'−'} ${num(Math.abs(observed.deltas[walk-1]))} = ${signed(observed.path[walk])}.${walk===N?' We end at zero, but this is not the enrichment score.':''}`;
+  $('positive').textContent=signed(observed.max);$('negative').textContent=signed(observed.min);
+  $('positiveRank').textContent=`After rank ${observed.peak}`;$('negativeRank').textContent=`After rank ${observed.trough}`;
+  $('ES').textContent=observed.tie?`Tie: ±${num(observed.magnitude)}`:signed(observed.es);
+  $('direction').textContent=observed.tie?'Equal positive and negative excursions.':observed.es>0?'Largest excursion is positive.':'Largest excursion is negative.';
+  $('interpretation').textContent=observed.tie?'The positive peak and negative trough are equally far from zero. This arrangement has no unique ES sign. This can happen when members lie exactly in the middle. It does not mean the curve is flat or that the pattern is necessarily non-significant.':observed.es>0?'The largest excursion is positive: member weight accumulates earlier in the ranked list. Not every member has to be at the beginning, and a positive ES alone does not establish significance.':'The largest excursion is negative: member weight accumulates later in the ranked list. Early non-members make the score fall before later members bring it back up. A negative ES alone does not establish significance.';
+  curve();nullResults();
+}
+function curve(){
+  const x=i=>64+i/N*910,y=v=>155-v*120;
+  let svg='<title>Running score: observed gene set</title>';
+  for(const v of [-1,-.5,0,.5,1])svg+=`<line x1="64" x2="974" y1="${y(v)}" y2="${y(v)}" stroke="${v===0?'#768b99':'#e1e7eb'}"/><text x="54" y="${y(v)+5}" text-anchor="end" fill="#526575" font-size="14">${signed(v)}</text>`;
+  for(let i=0;i<=N;i++)if(i===0||i===N||i%Math.ceil(N/10)===0)svg+=`<text x="${x(i)}" y="305" text-anchor="middle" font-size="13" fill="#526575">${i}</text>`;
+  const points=(p,n)=>p.slice(0,n+1).map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+  if(selected>=0)svg+=`<polyline points="${points(simulations[selected].path,N)}" fill="none" stroke="#8560a8" stroke-width="2.5" stroke-dasharray="7 5"/>`;
+  svg+=`<polyline points="${points(observed.path,walk)}" fill="none" stroke="#14786e" stroke-width="4" stroke-linejoin="round"/>`;
+  for(const i of members)svg+=`<line x1="${x(i+1)}" x2="${x(i+1)}" y1="278" y2="288" stroke="#e58a24" stroke-width="3"/>`;
+  svg+=`<circle cx="${x(walk)}" cy="${y(observed.path[walk])}" r="5" fill="#14786e"/>`;
+  if(walk===N){for(const idx of observed.tie?[observed.peak,observed.trough]:[observed.es>0?observed.peak:observed.trough])svg+=`<circle cx="${x(idx)}" cy="${y(observed.path[idx])}" r="7" fill="white" stroke="#e58a24" stroke-width="3"/>`;}
+  svg+='<text x="520" y="334" text-anchor="middle" font-size="15" fill="#526575">Rank in the full gene list (orange ticks = members)</text><text x="17" y="150" transform="rotate(-90 17 150)" text-anchor="middle" font-size="14" fill="#526575">Running enrichment score</text>';
+  $('curve').innerHTML=svg;
+}
+function nullResults(){
+  const absolute=$('test').value==='absolute',tied=observed.tie&&!absolute;
+  $('testExplanation').textContent=absolute?'Either-end comparison: count random |ES| values at least as large as the observed |ES|, using every randomisation in the denominator. This is a teaching alternative, not the usual GSEA nominal p-value.':tied?'The observed curve has tied positive and negative excursions. A single directional p-value would depend on an arbitrary sign choice. Select the either-end comparison to assess its maximum absolute deviation.':observed.es>0?'Positive observed ES: among non-negative random ES values, count those at least as large as the observed ES. Negative random scores are excluded from the denominator.':'Negative observed ES: among negative random ES values, count those at least as negative as the observed ES. Non-negative random scores are excluded from the denominator.';
+  const eligible=simulations.filter(d=>classify(d).eligible).length,extreme=simulations.filter(d=>classify(d).extreme).length;
+  $('completed').textContent=simulations.length;$('progress').textContent=`Target: ${$('reps').value} random sets, each containing ${members.size} genes.`;
+  $('fraction').textContent=eligible?`${extreme} / ${eligible}`:'—';$('pvalue').textContent=eligible?num(extreme/eligible):'—';
+  $('denominator').textContent=absolute?'All random scores are eligible.':tied?'No unique observed direction.':'Only random scores of the observed sign are eligible.';
+  $('pNote').textContent=tied?'No directional p-value shown for a tied observation. Try “Teaching alternative: either end, compare |ES|”.':!simulations.length?'Generate random gene sets to estimate the p-value.':!eligible?'No random score of the required sign was generated. Run more randomisations.':extreme===0?`No eligible random score was this extreme (0 / ${eligible}). The raw estimate is zero, not proof of a zero probability. Increase the number of randomisations; this run cannot resolve such a small tail reliably.`:`${extreme} of ${eligible} eligible random scores were at least as extreme. Estimated p = ${num(extreme/eligible)}. This is not the probability that the biological hypothesis is false, and it is not adjusted for testing multiple gene sets.`;
+  simulations.forEach((d,i)=>{const c=classify(d),b=document.createElement('button');b.textContent=d.tie?'±'+num(d.magnitude):signed(d.es);b.className='tile'+(c.extreme?' extreme':c.eligible?' same':'')+(selected===i?' selected':'');b.title=`Random set ${i+1}: ${d.tie?'tied excursions ±'+num(d.magnitude):'ES '+signed(d.es)}`;b.setAttribute('aria-label',b.title);b.onclick=()=>{stop();selected=i;walk=N;render();};$('tiles').append(b);});
+  if(selected>=0){const d=simulations[selected];$('randomDetail').textContent=`Dashed purple overlay: random set ${selected+1}; member ranks ${d.positions.map(i=>i+1).sort((a,b)=>a-b).join(', ')}.${d.tie?' Tied excursions; negative sign used only for null bookkeeping.':''}`;}
+  histogram(absolute,tied);
+}
+function histogram(absolute,tied){
+  const count=20,bins=Array.from({length:count},()=>[0,0,0]);
+  const value=d=>absolute?d.magnitude:d.es,toX=v=>64+(absolute?v:(v+1)/2)*910;
+  for(const d of simulations){const v=value(d),i=Math.min(count-1,Math.max(0,Math.floor((absolute?v:(v+1)/2)*count))),c=classify(d);bins[i][c.extreme?2:c.eligible?1:0]++;}
+  const max=4*Math.ceil(Math.max(4,...bins.map(b=>b.reduce((s,n)=>s+n,0)))/4),unit=190/max;
+  let svg='<title>Random enrichment scores compared with observed score</title>';
+  for(let j=0;j<=4;j++){const y=220-j*190/4;svg+=`<line x1="64" x2="974" y1="${y}" y2="${y}" stroke="#e1e7eb"/><text x="54" y="${y+4}" text-anchor="end" font-size="13" fill="#526575">${max*j/4}</text>`;}
+  bins.forEach((b,i)=>{let y=220;for(let j=0;j<3;j++){const h=b[j]*unit;y-=h;svg+=`<rect x="${64+i*910/count+2}" y="${y}" width="${910/count-4}" height="${h}" fill="${['#bdc9d2','#4278ad','#e58a24'][j]}"><title>${b[j]} random scores in this bin</title></rect>`;}});
+  for(const v of absolute?[0,.25,.5,.75,1]:[-1,-.5,0,.5,1])svg+=`<text x="${toX(v)}" y="242" text-anchor="middle" font-size="13" fill="#526575">${num(v)}</text>`;
+  for(const v of tied?[observed.max,observed.min]:[absolute?observed.magnitude:observed.es])svg+=`<line x1="${toX(v)}" x2="${toX(v)}" y1="22" y2="220" stroke="#182b39" stroke-width="2" stroke-dasharray="6 4"/>`;
+  svg+=`<text x="520" y="270" text-anchor="middle" font-size="14" fill="#526575">${absolute?'Absolute random enrichment score |ES|':'Signed random enrichment score ES'}</text><text x="18" y="120" transform="rotate(-90 18 120)" text-anchor="middle" font-size="14" fill="#526575">Number of random sets</text>`;
+  if(!simulations.length)svg+='<text x="520" y="110" text-anchor="middle" font-size="16" fill="#526575">Generate random sets to fill this distribution.</text>';
+  $('histogram').innerHTML=svg;
+}
+function addNull(){const set=randomSet(N,members.size);simulations.push({...calculate(N,set,$('weight').value==='1'),positions:Array.from(set)});}
+function runNull(animate){
+  stop();if(!observed)return;clearNull();walk=N;const target=Number($('reps').value);
+  if(!animate){for(let i=0;i<target;i++)addNull();render();return;}
+  render();$('stop').hidden=false;
+  timer=setInterval(()=>{const batch=target===1000?10:1;for(let i=0;i<batch&&simulations.length<target;i++)addNull();selected=simulations.length-1;render();if(simulations.length===target)stop();},85);
+}
+for(const b of document.querySelectorAll('.preset'))b.onclick=()=>configure(b.dataset.pattern);
+for(const id of ['N','K'])$(id).addEventListener('input',()=>configure(pattern==='custom'?'beginning':pattern));
+$('weight').onchange=recalculate;
+$('test').onchange=()=>{stop();render();};$('reps').onchange=()=>{stop();clearNull();render();};
+$('step').onclick=()=>{stop();selected=-1;if(walk===N)walk=0;walk++;render();};
+$('show').onclick=()=>{stop();walk=N;render();};$('rewind').onclick=()=>{stop();walk=0;selected=-1;render();};
+$('walk').onclick=()=>{stop();selected=-1;walk=0;render();$('stop').hidden=false;timer=setInterval(()=>{walk++;render();if(walk===N)stop();},Math.max(70,2200/N));};
+$('stop').onclick=stop;$('run').onclick=()=>runNull(false);$('animateNull').onclick=()=>runNull(true);
+recalculate();
+</script></body></html>

@@ -1915,6 +1915,70 @@ adjustment.
 
 ---
 
+# Appendix — GSEA simulator {#sec-gsea-simulator}
+
+**Are gene-set members concentrated towards one end of a ranked gene list?**
+Unlike the [threshold-based simulator above](#sec-enrichment-simulator), GSEA
+uses the full ranked list rather than first selecting significant genes. This
+simulator uses synthetic ranking statistics, not the course data, and runs
+directly in your browser.
+
+[Open the GSEA simulator in a full browser window](assets/gsea-simulator.html){target="_blank" rel="noopener"}
+
+Choose **Beginning**, **Middle**, **End**, or **Spread out** to position the
+gene-set members. You can also click individual genes to change membership.
+Start with **Unweighted** scoring: each member moves the running score up by
+**1/K**, and each non-member moves it down by **1/(N − K)**. Use **Next gene**
+or **Animate the walk** to follow the calculation.
+
+The **enrichment score (ES)** is the excursion furthest from zero, keeping its
+sign — not the score at the end of the list, which returns to zero. A positive
+ES indicates earlier accumulation of members; a negative ES indicates later
+accumulation. Neither sign alone establishes statistical significance.
+
+To estimate a p-value, generate **100 or 1,000 random gene sets** of the same
+size. In the default GSEA-style comparison:
+
+- **Positive observed ES:** among non-negative random ES values, count the
+  fraction at least as large as the observed ES.
+- **Negative observed ES:** among negative random ES values, count the fraction
+  at least as negative as the observed ES.
+
+For example, if the observed ES is **+0.25**, and **all 44 positive scores** out
+of 100 randomisations are at least +0.25, the estimated p-value is **44/44 = 1**,
+not 44/100. The denominator counts random scores in the relevant direction.
+These are single-gene-set p-values, not FDR-adjusted values.
+
+```{=html}
+<iframe src="assets/gsea-simulator.html" title="Interactive GSEA simulator: running enrichment scores and random gene sets" loading="lazy" style="width:100%;height:1100px;border:1px solid #dbe3e7;border-radius:12px;"></iframe>
+```
+
+*Try it:* compare Beginning, Middle and End with **N = 20, K = 4**, using
+unweighted scoring. Why does the middle arrangement produce both a negative
+trough and a positive peak? Then generate random sets and inspect their scores.
+Switch to weighted scoring to see how the sizes of the upward steps change.
+
+::: {.callout-tip collapse="true" title="Discussion and important limits"}
+Members at the beginning produce ES = +1; members at the end produce ES = −1.
+With the four members exactly in the middle, eight non-members first bring the
+score to −0.5, the four members raise it to +0.5, and the remaining eight
+non-members return it to zero. The two excursions tie: there is no unique sign.
+
+For a tied observation, this simulator deliberately leaves the directional
+p-value blank. Select **Teaching alternative: either end, compare |ES|** to
+compare the maximum absolute excursion with those from all randomisations.
+This additional teaching test is **not the standard GSEA nominal p-value**.
+
+Randomisation keeps the ranks and gene-set size fixed but changes membership;
+it is not sample-label permutation. The simulator does not calculate NES or FDR.
+Repeating the simulation changes the p-value estimate; 100 random sets give
+only a rough estimate. Zero extreme random scores does not prove a probability
+of zero. See the [GSEA user guide](https://docs.gsea-msigdb.org/GSEA/GSEA_User_Guide/)
+for the full method.
+:::
+
+---
+
 # Where to go next
 
 - The **lecture slides and the four papers** are on Absalon — this page does not
