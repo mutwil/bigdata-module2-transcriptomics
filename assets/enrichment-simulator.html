@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Could this overlap happen by chance?</title>
+<style>
+:root { color-scheme: light; --ink:#182b39; --muted:#526575; --orange:#e58a24; --teal:#14786e; --line:#dbe3e7; }
+* { box-sizing:border-box; }
+body { margin:0; background:#f3f6f8; color:var(--ink); font:17px/1.5 system-ui,sans-serif; }
+main { max-width:1180px; margin:auto; padding:30px 24px 48px; }
+h1 { font-size:clamp(27px,4vw,42px); line-height:1.15; margin:5px 0 12px; }
+h2 { font-size:21px; margin:0 0 10px; }
+p { margin:8px 0 16px; }
+.eyebrow { color:var(--teal); font-size:13px; font-weight:750; letter-spacing:.12em; text-transform:uppercase; }
+.intro { max-width:900px; color:var(--muted); }
+.panel { background:white; border:1px solid var(--line); border-radius:16px; padding:22px; margin-top:18px; }
+.inputs { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
+label { display:block; font-weight:650; font-size:15px; }
+label small { display:block; color:var(--muted); font-weight:400; min-height:44px; }
+input { width:100%; margin-top:8px; border:1px solid #8598a4; border-radius:8px; padding:10px; font:inherit; color:var(--ink); }
+button { border:0; border-radius:9px; padding:11px 16px; font:600 15px system-ui; cursor:pointer; background:var(--teal); color:white; }
+button.secondary { background:#e7efef; color:#185e58; }
+button:disabled { opacity:.5; cursor:default; }
+button:focus-visible,input:focus-visible { outline:3px solid #236dcc; outline-offset:3px; }
+.actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+.error { color:#ad2424; margin:10px 0 0; }
+.stats { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.stat { background:#edf5f3; border-radius:12px; padding:16px; }
+.stat strong { display:block; font-size:30px; line-height:1.3; }
+.stat span { color:var(--muted); font-size:14px; }
+.columns { display:grid; grid-template-columns:1.05fr 1fr; gap:18px; }
+.columns .panel { min-width:0; }
+.small { font-size:14px; color:var(--muted); }
+#histogram { display:block; width:100%; height:auto; }
+.draws { display:grid; grid-template-columns:repeat(10,1fr); gap:5px; margin-top:14px; }
+.draw { background:#e9eef2; color:#213848; padding:6px 0; border-radius:5px; font-size:14px; border:2px solid transparent; }
+.draw.extreme { background:#d8eee8; color:#0b554d; }
+.draw.selected { border-color:#172d3c; }
+.legend { display:flex; flex-wrap:wrap; gap:15px; font-size:13px; color:var(--muted); }
+.key { width:12px; height:12px; display:inline-block; background:#9aabb9; border-radius:3px; margin-right:5px; }
+.key.tail { background:var(--teal); }
+.genes { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+.gene { width:22px; height:22px; border-radius:50%; background:#354958; display:inline-block; }
+.gene.member { background:var(--orange); }
+.explain { border-left:4px solid var(--orange); padding-left:14px; }
+details { margin-top:18px; font-size:14px; color:var(--muted); }
+summary { cursor:pointer; font-weight:650; }
+footer { margin-top:20px; color:var(--muted); font-size:13px; }
+@media(max-width:780px) { .inputs,.stats { grid-template-columns:repeat(2,1fr); } .columns { grid-template-columns:1fr; } label small { min-height:0; } }
+@media(max-width:440px) { main { padding:20px 12px; } .panel { padding:16px; } .stats { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+<div class="eyebrow">Transcriptomics · enrichment analysis</div>
+<h1>Could this overlap happen by chance?</h1>
+<p class="intro">Imagine choosing genes at random, rather than selecting them by differential expression. Would we get as many genes from our functional group? Repeat the experiment <strong>100 times</strong> to find out.</p>
+<section class="panel" aria-label="Simulation settings">
+<div class="inputs">
+<label>Total genes · N<small>All genes eligible for selection (the background).</small><input id="N" type="number" min="1" max="1000000" step="1" value="26"></label>
+<label>Genes in the gene set · K<small>Members of the functional group, within that background.</small><input id="K" type="number" min="0" step="1" value="7"></label>
+<label>Genes selected · n<small>Size of our list, e.g. the upregulated genes.</small><input id="n" type="number" min="1" max="5000" step="1" value="4"></label>
+<label>Observed overlap · k<small>How many genes in our real list belong to the gene set?</small><input id="k" type="number" min="0" step="1" value="2"></label>
+</div>
+<div class="actions">
+<button id="run">Run 100 draws</button>
+<button id="animate" class="secondary">Animate 100 draws</button>
+<button id="stop" class="secondary" hidden>Stop</button>
+<button id="preset" class="secondary">Reset to slide 14</button>
+</div>
+<p id="error" class="error" role="alert"></p>
+<p class="small" style="margin-bottom:0">Each draw selects <strong>n different genes</strong>: no replacement within a draw. We restore the entire background before the next draw. For RNA-seq, the background is not automatically every gene in the genome, and it includes the selected genes.</p>
+</section>
+<section class="panel" aria-label="Results">
+<div class="stats">
+<div class="stat">Expected overlap<strong id="expected"></strong><span id="expectedDetail"></span></div>
+<div class="stat">Simulated tail fraction<strong id="simulated">—</strong><span id="simDetail">Run the simulation to estimate the p-value.</span></div>
+<div class="stat">Exact one-sided p-value<strong id="exact"></strong><span>Probability of k or more members under random selection.</span></div>
+</div>
+<p id="comparison" class="explain" style="margin-top:18px;margin-bottom:0"></p>
+</section>
+<div class="columns">
+<section class="panel">
+<h2>How much overlap did we get?</h2>
+<div class="legend"><span><i class="key"></i>Below observed overlap</span><span><i class="key tail"></i>Observed overlap or greater</span></div>
+<svg id="histogram" viewBox="0 0 540 300" role="img" aria-label="Histogram of overlap counts"></svg>
+<p class="small">The green bars count outcomes at least as enriched as our observation—not only exact matches. Their total divided by the number of completed draws estimates the one-sided p-value.</p>
+</section>
+<section class="panel">
+<h2 id="progress" aria-live="polite">100 random gene lists</h2>
+<p class="small">Each tile shows the overlap in one draw. Click a tile to inspect the selected genes.</p>
+<div id="draws" class="draws"></div>
+<p id="selectedTitle" style="margin-top:16px">No draw selected yet.</p>
+<div id="genes" class="genes" aria-label="Genes in selected draw"></div>
+<p id="selectedDetail" class="small"></p>
+</section>
+</div>
+<section class="panel">
+<h2>What should we conclude?</h2>
+<p id="conclusion"></p>
+<p>Repeat the 100 draws: the estimate changes because the samples are random, but the exact probability does not. <strong>Zero extreme draws does not prove that the probability is zero.</strong> A hundred draws give a rough demonstration, not a precise estimate of small p-values.</p>
+<p class="small">This tests one gene set. When testing many gene sets, adjust their p-values for multiple testing. Enrichment is an association; it does not by itself prove that a pathway is activated.</p>
+<details><summary>What is the statistical model?</summary>
+<p>Under the null model, all subsets of n genes from the N background genes are equally likely. With K gene-set members in that background, the overlap X follows a hypergeometric distribution. The enrichment p-value is P(X ≥ k). Its mean is n × K / N.</p>
+<p>The simulator samples actual distinct gene IDs in every draw. Genes 1–K represent gene-set members. The exact probability is calculated from the hypergeometric distribution, independently of the 100 random draws. This is the same upper-tail test as a one-sided Fisher exact test on the corresponding 2 × 2 table.</p>
+<p>Real gene selection can be affected by expression level, gene length and other biases; random sampling is the reference model, not a claim that differential expression is literally random.</p>
+</details>
+</section>
+<footer>Standalone teaching simulator · No uploads, installation or internet connection required. Reference: <a href="https://stat.ethz.ch/R-manual/R-devel/library/stats/html/Hypergeometric.html">R hypergeometric distribution documentation</a>.</footer>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+let config, distribution, draws = [], selected = -1, timer = null;
+const fmt = x => x === 0 ? '0' : x < .0001 ? x.toExponential(2) : Number(x.toPrecision(4)).toString();
+const probability = x => x === 0 ? '< 1e-300 (below numerical precision)' : fmt(x);
+function readConfig() {
+  const c = Object.fromEntries(['N','K','n','k'].map(id => [id, Number($(id).value)]));
+  if (['N','K','n','k'].some(id => $(id).value.trim() === '') || !Object.values(c).every(Number.isSafeInteger)) throw Error('Enter a whole number in every box.');
+  if (c.N < 1 || c.N > 1000000) throw Error('Choose a background size N from 1 to 1,000,000.');
+  if (c.K < 0 || c.K > c.N) throw Error('The gene-set size K must be between 0 and N.');
+  if (c.n < 1 || c.n > Math.min(c.N,5000)) throw Error('The selected list n must be between 1 and the smaller of N and 5,000.');
+  const low = Math.max(0,c.n-(c.N-c.K)), high = Math.min(c.n,c.K);
+  if (c.k < low || c.k > high) throw Error(`For these settings, the observed overlap k must be between ${low} and ${high}.`);
+  return c;
+}
+function hypergeom(c) {
+  const lo = Math.max(0,c.n+c.K-c.N), hi = Math.min(c.n,c.K), logs = [0];
+  for (let x=lo; x<hi; x++) logs.push(logs[logs.length-1] + Math.log(c.K-x) + Math.log(c.n-x) - Math.log(x+1) - Math.log(c.N-c.K-c.n+x+1));
+  const max = Math.max(...logs), weights = logs.map(x=>Math.exp(x-max));
+  const sum = weights.reduce((a,b)=>a+b,0), probs = weights.map(x=>x/sum);
+  return {lo, hi, probs, tail:Math.min(1,probs.reduce((s,p,i)=>s+(lo+i>=c.k?p:0),0))};
+}
+function sample(c, random=Math.random) {
+  // Floyd's algorithm: uniform sampling of n distinct IDs without building all N IDs.
+  const ids = new Set();
+  for (let j=c.N-c.n+1; j<=c.N; j++) { const t=1+Math.floor(random()*j); ids.add(ids.has(t)?j:t); }
+  const genes=Array.from(ids);
+  // Shuffle display order; set membership and overlap are unchanged.
+  for (let i=genes.length-1; i>0; i--) { const j=Math.floor(random()*(i+1)); [genes[i],genes[j]]=[genes[j],genes[i]]; }
+  return {genes, overlap:genes.reduce((s,id)=>s+(id<=c.K?1:0),0)};
+}
+function stop() {
+  if(timer!==null) clearInterval(timer);
+  timer=null;
+  for(const id of ['N','K','n','k','run','animate','preset']) $(id).disabled=false;
+  $('stop').hidden=true;
+}
+function reset() {
+  stop(); draws=[]; selected=-1; $('error').textContent='';
+  try { config=readConfig(); distribution=hypergeom(config); }
+  catch(e) { config=null; distribution=null; $('error').textContent=e.message; }
+  render();
+}
+function render() {
+  $('draws').replaceChildren(); $('genes').replaceChildren();
+  $('progress').textContent=`${draws.length} / 100 random gene lists`;
+  $('selectedTitle').textContent='No draw selected yet.'; $('selectedDetail').textContent='';
+  if(!config) {
+    for(const id of ['expected','simulated','exact']) $(id).textContent='—';
+    for(const id of ['expectedDetail','simDetail','comparison','conclusion']) $(id).textContent='';
+    $('histogram').replaceChildren(); return;
+  }
+  const {N,K,n,k}=config, hits=draws.filter(d=>d.overlap>=k).length;
+  $('expected').textContent=fmt(n*K/N)+' genes';
+  $('expectedDetail').textContent=`${n} × ${K} / ${N}: average under random selection.`;
+  $('exact').textContent=probability(distribution.tail);
+  $('simulated').textContent=draws.length ? `${hits} / ${draws.length} = ${fmt(hits/draws.length)}` : '—';
+  $('simDetail').textContent=draws.length ? `Draws with ${k} or more gene-set members.` : 'Run the simulation to estimate the p-value.';
+  const fold=K>0?`${fmt((k/n)/(K/N))}-fold enrichment`:'fold enrichment is undefined because K = 0';
+  $('comparison').textContent=`Observed: ${k} / ${n} = ${fmt(100*k/n)}% in the gene set. Background: ${K} / ${N} = ${fmt(100*K/N)}%. This gives ${fold}.`;
+  $('conclusion').textContent=distribution.tail<.05
+    ? `Under random selection, an overlap of ${k} or more has probability ${probability(distribution.tail)}. This is below 0.05 for this single test; multiple-testing adjustment is still needed if we test many gene sets.`
+    : `Under random selection, an overlap of ${k} or more has probability ${fmt(distribution.tail)}. This is not statistically significant at 0.05. A larger proportion in the selected list does not automatically mean significant enrichment.`;
+  draws.forEach((d,i)=>{
+    const b=document.createElement('button'); b.className='draw'+(d.overlap>=k?' extreme':'')+(i===selected?' selected':'');
+    b.textContent=d.overlap; b.title=`Draw ${i+1}: ${d.overlap} members out of ${n}`;
+    b.setAttribute('aria-label',b.title); b.setAttribute('aria-pressed',i===selected?'true':'false');
+    b.onclick=()=>{selected=i;render();}; $('draws').append(b);
+  });
+  if(selected>=0) {
+    const d=draws[selected]; $('selectedTitle').textContent=`Draw ${selected+1}: ${d.overlap} of ${n} genes belong to the gene set.`;
+    for(const id of d.genes.slice(0,120)) {
+      const dot=document.createElement('span'); dot.className='gene'+(id<=K?' member':'');
+      dot.title=`Gene ${id}: ${id<=K?'gene-set member':'not in this gene set'}`; dot.setAttribute('role','img'); dot.setAttribute('aria-label',dot.title); $('genes').append(dot);
+    }
+    $('selectedDetail').textContent=`Orange = gene-set member; dark = other gene.${n>120?' Showing only the first 120 sampled genes; the overlap uses all '+n+'.':''} ${d.overlap>=k?'This draw counts towards the p-value estimate.':'This draw does not reach the observed overlap.'}`;
+  }
+  histogram();
+}
+function histogram() {
+  const {lo,hi}=distribution, width=hi-lo+1, size=Math.max(1,Math.ceil(width/30));
+  const bins=Array.from({length:Math.ceil(width/size)},(_,i)=>({lo:lo+i*size,hi:Math.min(hi,lo+(i+1)*size-1),below:0,tail:0}));
+  draws.forEach(d=>{const b=bins[Math.floor((d.overlap-lo)/size)]; b[d.overlap>=config.k?'tail':'below']++;});
+  const max=4*Math.ceil(Math.max(4,...bins.map(b=>b.below+b.tail))/4), left=48, base=247, top=25, plotWidth=470, step=plotWidth/bins.length;
+  let svg='<title>Overlap counts in random gene lists</title><desc>Green portions count overlaps at least as large as the observed overlap.</desc>';
+  for(let j=0;j<=4;j++) {
+    const y=base-(base-top)*j/4; svg+=`<line x1="${left}" x2="520" y1="${y}" y2="${y}" stroke="#e0e7eb"/><text x="40" y="${y+4}" text-anchor="end" font-size="12" fill="#526575">${fmt(max*j/4)}</text>`;
+  }
+  bins.forEach((b,i)=>{
+    const x=left+i*step+step*.12,w=step*.76, unit=(base-top)/max, y=base-b.below*unit;
+    svg+=`<rect x="${x}" y="${y}" width="${w}" height="${b.below*unit}" fill="#9aabb9"><title>Overlap ${b.lo}–${b.hi}: ${b.below} below-observation draws</title></rect><rect x="${x}" y="${y-b.tail*unit}" width="${w}" height="${b.tail*unit}" fill="#14786e"><title>Overlap ${b.lo}–${b.hi}: ${b.tail} draws reaching the observation</title></rect>`;
+    if(bins.length<=12 || i%Math.ceil(bins.length/10)===0) svg+=`<text x="${x+w/2}" y="266" text-anchor="middle" font-size="12" fill="#526575">${b.lo===b.hi?b.lo:b.lo+'–'+b.hi}</text>`;
+  });
+  svg+='<text x="280" y="292" text-anchor="middle" font-size="13" fill="#526575">Number of gene-set members in a draw</text><text x="15" y="140" transform="rotate(-90 15 140)" text-anchor="middle" font-size="13" fill="#526575">Number of draws</text>';
+  if(!draws.length) svg+='<text x="280" y="125" text-anchor="middle" fill="#526575" font-size="16">Run 100 draws to fill this chart.</text>';
+  $('histogram').innerHTML=svg;
+}
+function run(animated) {
+  reset(); if(!config)return;
+  if(!animated) {draws=Array.from({length:100},()=>sample(config)); selected=99; render(); return;}
+  for(const id of ['N','K','n','k','run','animate','preset']) $(id).disabled=true;
+  $('stop').hidden=false;
+  timer=setInterval(()=>{draws.push(sample(config));selected=draws.length-1;render();if(draws.length===100)stop();},90);
+}
+$('run').onclick=()=>run(false); $('animate').onclick=()=>run(true); $('stop').onclick=stop;
+$('preset').onclick=()=>{for(const [id,v] of Object.entries({N:26,K:7,n:4,k:2}))$(id).value=v;reset();};
+for(const id of ['N','K','n','k'])$(id).addEventListener('input',reset);
+reset();
+</script>
+</body>
+</html>

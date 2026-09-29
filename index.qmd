@@ -1873,6 +1873,48 @@ teachers are the authority, not this page.
 
 ---
 
+# Appendix — Enrichment simulator {#sec-enrichment-simulator}
+
+**Could the overlap in our gene list arise by chance?** Use this simulator to
+repeat the random-sampling experiment from enrichment lecture slide 14.
+It runs directly in your browser — no ERDA or R setup is needed.
+
+[Open the enrichment simulator in a full browser window](assets/enrichment-simulator.html){target="_blank" rel="noopener"}
+
+Set **N** (all background genes), **K** (gene-set members in that background),
+**n** (the number of genes selected), and **k** (the observed overlap). Each draw
+selects **n different genes without replacement**. The entire background is
+restored before the next draw. For RNA-seq, use genes eligible for selection as
+the background, including the selected genes, rather than automatically using
+every gene in the genome.
+
+The starting example has **N = 26, K = 7, n = 4, k = 2**. Click **Animate 100
+draws** to watch the simulation, or **Run 100 draws** for an instant result.
+Green tiles mark draws with **two or more** gene-set members. Their fraction
+estimates the one-sided enrichment p-value; compare it with the exact value
+shown alongside. Click any tile to inspect that draw's genes.
+
+```{=html}
+<iframe src="assets/enrichment-simulator.html" title="Interactive enrichment simulator: 100 random gene lists" loading="lazy" style="width:100%;height:1000px;border:1px solid #dbe3e7;border-radius:12px;"></iframe>
+```
+
+*Try it:* run the same settings several times. Why does the simulated fraction
+change while the exact p-value stays the same? Does 50% gene-set membership in
+our selected list, compared with about 27% in the background, necessarily mean
+significant enrichment?
+
+::: {.callout-tip collapse="true" title="Discussion"}
+The lists are random, so 100 draws give a different estimate each time. The exact
+probability depends only on N, K, n and k: here, **P(X ≥ 2) ≈ 0.287**. The observed
+proportion is higher, but the overlap is **not significant at 0.05**. We would
+expect about 29 of 100 random lists to have two or more members, although the
+actual number varies. Zero extreme draws would not prove a probability of zero.
+This is one gene-set test; testing many gene sets also requires multiple-testing
+adjustment.
+:::
+
+---
+
 # Where to go next
 
 - The **lecture slides and the four papers** are on Absalon — this page does not
