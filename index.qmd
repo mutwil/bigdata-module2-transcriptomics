@@ -1906,61 +1906,168 @@ with the [GSEA simulator in the appendix](#sec-gsea-simulator).
 
 ## 4.7 Clustering expression profiles
 
-Enrichment on one gene list answers one question. Clustering first, then testing
-each cluster, asks *which programmes* the fungus runs in *which* growth form — the
-analysis on the last slide of the lecture.
+**Which genes have similar expression patterns across CON, APP, CIH and IL?**
+For example, one group of genes might be highest in APP, while another is highest
+in IL. *Clustering* groups genes with similar patterns, without us specifying
+which genes should go together.
+
+In §3.4 we grouped **samples**. Here we group **genes**. Our aim is simply to
+recognise the patterns in four clusters — **there is no additional enrichment
+test to code in this exercise**.
+
+### 1. Prepare one expression profile per gene
+
+Use `vsd` and `coldata` from this session's **Files & Setup** block. We first
+average the three replicates within each condition. Each gene will then have
+four values: one for CON, APP, CIH and IL.
 
 ```r
-conds <- c("CON", "APP", "CIH", "IL")
-va    <- assay(vsd)
-prof  <- sapply(conds, function(cd) rowMeans(va[, coldata$condition == cd]))
+# Get the VST expression values: genes in rows, samples in columns
+vst_values <- assay(vsd)
 
-# genes that actually change, scaled to shape rather than level
-vary   <- names(sort(apply(prof, 1, var), decreasing = TRUE))[1:1500]
-scaled <- t(scale(t(prof[vary, ])))
+# Get each sample's condition, in the same order as the expression columns
+condition <- coldata$condition
 
+# Average the replicate values within each condition, one gene at a time
+con_mean <- rowMeans(vst_values[, condition == "CON"])
+app_mean <- rowMeans(vst_values[, condition == "APP"])
+cih_mean <- rowMeans(vst_values[, condition == "CIH"])
+il_mean  <- rowMeans(vst_values[, condition == "IL"])
+
+# Put those four columns side by side
+profiles <- cbind(CON = con_mean, APP = app_mean,
+                  CIH = cih_mean, IL = il_mean)
+
+# Inspect the first few genes: there should be four columns
+head(profiles)
+```
+
+**Read the R:** `condition == "APP"` identifies the APP sample columns.
+`rowMeans()` averages those columns for each gene. `cbind()` combines columns.
+These are averages of **VST values**, not raw counts or fold changes.
+
+### 2. Prepare the profiles for grouping
+
+We focus on the **1,500 genes with the most variation between condition means**.
+This is an exploratory selection, not a test of differential expression.
+
+```r
+# Measure how much each gene's four condition means vary
+# In apply(), 1 means work across each ROW; var calculates variance
+gene_variance <- apply(profiles, 1, var)
+
+# Exclude completely flat profiles: they cannot be scaled by their variation
+not_flat <- gene_variance > 0
+profiles <- profiles[not_flat, ]
+gene_variance <- gene_variance[not_flat]
+
+# Order genes from most variable to least variable
+gene_order <- order(gene_variance, decreasing = TRUE)
+
+# Keep the first 1,500 rows in that order
+selected_rows <- head(gene_order, 1500)
+selected_profiles <- profiles[selected_rows, ]
+```
+
+We want to compare **where each gene is relatively high or low**, rather than
+grouping genes only because they have similar overall expression levels. To do
+this, subtract each gene's own mean and divide by its standard deviation. This
+is called **row scaling**; it is separate from the VST transformation.
+
+```r
+# scale() works on columns, so first turn the table: one gene per column
+genes_in_columns <- t(selected_profiles)
+
+# Give each gene a mean of 0 and a standard deviation of 1
+scaled_columns <- scale(genes_in_columns)
+
+# Turn the table back: one gene per row, four conditions in columns
+scaled_profiles <- t(scaled_columns)
+```
+
+`t()` swaps rows and columns. After scaling, a positive value means **above that
+gene's own average across the four conditions**; a negative value means below it.
+It does not mean that the gene has a negative read count. The preparation code is
+provided for you — the main task below is interpreting the resulting patterns.
+
+### 3. Ask R to make four clusters
+
+```r
+# Make the random starting choices repeatable
 set.seed(42)
-km <- kmeans(scaled, centers = 4, nstart = 25)
-table(km$cluster)
 
-par(mfrow = c(2, 2))
-for (i in 1:4) {
-  members <- scaled[km$cluster == i, ]
-  matplot(t(members[1:min(120, nrow(members)), ]), type = "l", lty = 1,
-          col = adjustcolor("grey50", 0.25), xaxt = "n",
-          ylab = "scaled expression",
-          main = paste0("Cluster ", i, " (n = ", sum(km$cluster == i), ")"))
-  lines(km$centers[i, ], col = "#C44E52", lwd = 3)
-  axis(1, 1:4, conds)
-}
-par(mfrow = c(1, 1))
+# Group genes with similar scaled expression profiles into four clusters
+clusters <- kmeans(scaled_profiles, centers = 4, nstart = 25)
+
+# How many genes ended up in each cluster?
+table(clusters$cluster)
 ```
 
-*Your turn:* run the §4.4 loop on one cluster's genes, with the 1,500 variable genes
-as the universe. Do the CON-peaking cluster's top categories make biological sense?
+`centers = 4` asks for **four groups of genes**. We choose four for this exercise;
+it is not required because there are four conditions. `nstart = 25` tries 25
+different starting arrangements and keeps the best fit. `clusters$cluster`
+stores the group number assigned to each gene.
 
-::: {.callout-tip collapse="true" title="Solution"}
+Cluster numbers are just labels: **cluster 1 is not automatically the CON
+cluster**, and the numbering may differ between computers.
+
+### 4. Look at one cluster at a time
+
 ```r
-i  <- which.max(km$centers[, "CON"])          # the CON-peaking cluster
-cl <- rownames(scaled)[km$cluster == i]
-Nu <- length(vary); nn <- length(cl)
-out <- data.frame()
-for (tm in unique(gene_sets$term_name)) {
-  sg <- gene_sets$gene[gene_sets$term_name == tm]
-  K  <- sum(sg %in% vary); k <- sum(cl %in% sg)
-  if (K < 5) next
-  out <- rbind(out, data.frame(term = tm, overlap = k, set_size = K,
-               fold = round(k / (nn * K / Nu), 2),
-               p = phyper(k - 1, K, Nu - K, nn, lower.tail = FALSE)))
-}
-out$padj <- p.adjust(out$p, "BH")
-head(out[order(out$p), ], 5)
+# Start with cluster 1. Later, change only this number to 2, 3 and 4.
+cluster_number <- 1
+
+# Get this cluster's average scaled expression in the four conditions
+cluster_profile <- clusters$centers[cluster_number, ]
+
+# Show one plot, with points joined by a line
+par(mfrow = c(1, 1))
+plot(cluster_profile,
+     type = "b", pch = 19, lwd = 2, col = "#C44E52",
+     xaxt = "n",
+     ylim = range(clusters$centers),
+     xlab = "Condition", ylab = "Average scaled expression",
+     main = paste("Cluster", cluster_number))
+
+# Label the four positions and mark the zero reference level
+axis(1, at = 1:4, labels = c("CON", "APP", "CIH", "IL"))
+abline(h = 0, lty = 2, col = "grey60")
 ```
-A cluster is a much more coherent list than "everything with padj < 0.05" — the
-folds rise, and the CON cluster leans towards cytochrome P450 and
-heterokaryon-incompatibility genes (raw p ≈ 0.015). But nothing survives BH, so the
-honest way to report it is as a hypothesis, never as a finding.
+
+**Read the plot:** each point is the average scaled value of the genes in that
+cluster for one condition. A peak at APP means the cluster tends to have its
+highest relative expression in APP. The four points are **conditions, not four
+replicates**. The connecting line helps you see the pattern; it does not represent
+a continuous time course. The vertical limits stay the same across the four plots.
+
+Change `cluster_number` to **2**, **3**, and **4**, rerunning this plotting block
+each time. You do not need to rerun the preparation or clustering.
+
+| Cluster | Condition with highest average scaled expression | Describe the pattern in a few words |
+|:--|:--|:--|
+| 1 | | |
+| 2 | | |
+| 3 | | |
+| 4 | | |
+
+*Discuss:* do you see a cluster that is relatively high in APP? In IL? Does every
+cluster need to peak in a different condition?
+
+::: {.callout-tip collapse="true" title="Discussion"}
+Describe the curves you actually obtain rather than assigning biological meaning
+to the cluster numbers. Two clusters can peak in the same condition but differ in
+the rest of their profiles. A cluster's average also hides variation between its
+member genes: they do not all follow exactly the same curve.
+
+These plots describe **relative patterns**, not expression fold changes or
+statistical significance. Averaging replicates also hides their variability;
+the clusters do not replace the differential-expression analysis.
 :::
+
+**Connection to enrichment:** each cluster provides a gene list. We could ask
+whether that list contains more genes from a particular family than expected,
+using the method from §4.2. The background would then be the genes we actually
+included in clustering. For now, stop at describing the expression patterns.
 
 ---
 
