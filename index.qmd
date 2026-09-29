@@ -1533,67 +1533,242 @@ length(universe); length(de_genes)
 The threshold (`log2FC > 2`) is a **choice you are making** — §4.6 shows how much it
 matters.
 
-## 4.2 The hypergeometric test, by hand
+## 4.2 Are P450 genes over-represented?
 
-The lecture's question — *is the overlap larger than expected by random sampling?* —
-is answered by the hypergeometric distribution. Four numbers define it: $N$ the
-universe, $n$ your DE list, $K$ the genes of the set inside the universe, $k$ the
-overlap. The p-value is the probability of an overlap at least as large by chance:
+Our question is: **does our upregulated gene list contain more Cytochrome P450
+genes than we would expect from a random list of the same size?**
 
-$$
-P(X \ge k) \;=\; \sum_{j=k}^{\min(n,\,K)}
-\frac{\binom{K}{j}\binom{N-K}{\,n-j\,}}{\binom{N}{n}}
-$$
+The **hypergeometric test** answers this question. It uses the same idea as the
+[random-draw simulator](#sec-enrichment-simulator), but calculates the probability
+directly instead of drawing 100 random lists. You do not need to calculate a
+formula by hand: we will give R the sizes of the background, our list, and their
+overlap with the P450 family.
 
-which is exactly what `phyper()` computes.
+### Find the P450 genes
 
 ```r
-set_genes <- gene_sets$gene[gene_sets$term_name == "Cytochrome P450"]
+# Identify annotation rows labelled "Cytochrome P450"
+p450_rows <- gene_sets$term_name == "Cytochrome P450"
 
-N <- length(universe)
-n <- length(de_genes)
-K <- sum(set_genes %in% universe)
-k <- sum(de_genes %in% set_genes)
-c(N = N, n = n, K = K, k = k)
+# Take the gene IDs from those rows
+p450_genes <- gene_sets$gene[p450_rows]
 
-n * K / N                        # expected overlap by chance
-k / (n * K / N)                  # fold enrichment (~1 = exactly what chance predicts)
+# Count each gene only once, even if its annotation appears more than once
+p450_genes <- unique(p450_genes)
 
-# P(X >= k): phyper gives P(X <= q), so ask for the upper tail at k - 1
-phyper(k - 1, K, N - K, n, lower.tail = FALSE)
+# Keep only P450 genes that belong to our analysis background
+p450_genes <- p450_genes[p450_genes %in% universe]
+
+head(p450_genes)
 ```
 
-Beware the off-by-one: passing `k` instead of `k - 1` silently makes every p-value
-too small, because "at least k" must include k itself.
+**Read the R:** `==` checks whether two values are equal. `p450_rows` therefore
+contains `TRUE` for P450 rows and `FALSE` for other rows. Square brackets keep the
+entries marked `TRUE`. `%in%` asks whether each gene ID occurs in another list;
+it does not calculate a percentage.
+
+### Count the genes, then compare observed with expected
 
 ```r
-# Fisher's exact test on the 2x2 table is the identical calculation
-tab <- matrix(c(k, n - k, K - k, N - n - (K - k)), nrow = 2)
-fisher.test(tab, alternative = "greater")$p.value
+# How many genes are in the background and in our upregulated list?
+background_size <- length(universe)
+list_size <- length(de_genes)
+
+# How many background genes belong to the P450 family?
+set_size <- length(p450_genes)
+
+# For each upregulated gene, ask: is it a P450 gene?
+is_p450 <- de_genes %in% p450_genes
+
+# Count the TRUE answers: this is our observed overlap
+overlap <- sum(is_p450)
+
+# Display the four numbers used by the test
+background_size
+list_size
+set_size
+overlap
 ```
 
-## 4.3 Does your code actually work? Use a positive control
+`length()` counts entries in a list of gene IDs. `sum(is_p450)` counts the `TRUE`
+answers because R treats `TRUE` as 1 and `FALSE` as 0.
 
-Cytochrome P450 comes out at fold ≈ 1 — no enrichment. Before concluding anything
-biological, rule out the other explanation: that your code is wrong. Build a gene
-list you *know* is enriched:
+If P450 genes make up 1% of the background, a random list of 300 genes would
+contain **3 P450 genes on average**. Use the actual proportions in our data:
 
 ```r
+# Fraction of background genes that are P450 genes
+background_fraction <- set_size / background_size
+
+# Expected P450 count in a random list of the same size as ours
+expected_overlap <- list_size * background_fraction
+
+# Fold enrichment = observed P450 count / expected P450 count
+fold_enrichment <- overlap / expected_overlap
+
+overlap
+expected_overlap
+fold_enrichment
+```
+
+A fold enrichment of **1** means observed and expected counts are equal; **2**
+means twice as many P450 genes as expected. This describes the size of the
+enrichment, **not whether it is statistically significant**.
+
+### Ask whether the overlap is surprising
+
+We now ask: **if we selected genes randomly from the background, how often would
+we get our observed number of P450 genes or more?**
+
+```r
+# Number of background genes that are NOT P450 genes
+other_size <- background_size - set_size
+
+# Probability of obtaining our observed P450 count or MORE by chance
+p_value <- phyper(
+  q = overlap - 1,     # include the observed overlap itself (explained below)
+  m = set_size,        # P450 genes available in the background
+  n = other_size,      # non-P450 genes available in the background
+  k = list_size,       # number of genes selected in each random list
+  lower.tail = FALSE  # ask for counts ABOVE q
+)
+
+p_value
+```
+
+**Why subtract 1?** With `lower.tail = FALSE`, R answers **"more than q"**.
+If we observed 10 P450 genes, we want **10 or more**, so we ask for **more than 9**.
+That is all `overlap - 1` does. Here `q`, `m`, `n` and `k` are R's argument names;
+the comments explain what to supply to each one.
+
+A small p-value means an overlap this large would be unusual under random
+selection. It does not measure the size of the enrichment. This is one gene-set
+test; we will adjust for testing many sets in §4.4. See the
+[R reference for `phyper()`](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/Hypergeometric.html).
+
+*Check your understanding:* if the observed overlap were 6, what number should
+we supply as `q` to include 6, 7, 8, and all larger possible overlaps?
+
+::: {.callout-tip collapse="true" title="Answer"}
+Use `q = 5`. More than 5 means 6 or more. The code already does this using
+`q = overlap - 1`.
+:::
+
+::: {.callout-note collapse="true" title="Optional: the same test using Fisher's exact test"}
+We can put the same gene counts into a table. Rows separate selected genes from
+the remaining background genes; columns separate P450 from non-P450 genes.
+This is an alternative calculation, not an extra test you need to perform.
+
+```r
+comparison <- rbind(
+  Selected = c(P450 = overlap,
+               Other = list_size - overlap),
+  Not_selected = c(P450 = set_size - overlap,
+                   Other = other_size - (list_size - overlap))
+)
+comparison
+
+# "greater" asks whether P450 genes are over-represented in the selected list
+fisher.test(comparison, alternative = "greater")$p.value
+```
+
+This gives the same p-value as the hypergeometric calculation above, apart from
+possible numerical rounding.
+:::
+
+## 4.3 Check the method with a deliberately enriched list
+
+Before interpreting the real result, we will make an **artificial gene list**
+with an unusually high proportion of P450 genes. This is a *positive control*:
+a test case in which we deliberately build in the pattern we want to detect.
+
+We will select **60 P450 genes and 240 other genes**, giving 300 genes in total.
+P450 genes will therefore make up **60/300 = 20%** of this artificial list.
+Compare that with `background_fraction` from §4.2: 20% should be much higher for
+our course data. We keep the same background and do not change the real
+`de_genes` list.
+
+### Prepare two separate pools of genes
+
+`p450_genes` already contains the background P450 genes from §4.2. We now need
+a second pool containing the other background genes.
+
+```r
+# Mark which background genes are P450 genes
+is_p450_background <- universe %in% p450_genes
+
+# ! means "not": keep the background genes that are NOT P450 genes
+other_genes <- universe[!is_p450_background]
+
+# Check the pool sizes: we need at least 60 P450 and 240 other genes
+length(p450_genes)
+length(other_genes)
+```
+
+### Build the artificial list
+
+```r
+# Make the random selections reproducible when we rerun this example
 set.seed(1)
-p450 <- intersect(gene_sets$gene[gene_sets$term_name == "Cytochrome P450"], universe)
-fake <- c(sample(p450, 60), sample(setdiff(universe, p450), 240))
 
-kf <- sum(fake %in% p450); Kf <- length(p450); nf <- length(fake)
-kf / (nf * Kf / N)                                    # fold enrichment ~15
-phyper(kf - 1, Kf, N - Kf, nf, lower.tail = FALSE)    # astronomically small
+# Choose 60 different P450 genes
+chosen_p450 <- sample(p450_genes, size = 60, replace = FALSE)
+
+# Choose 240 different non-P450 genes
+chosen_other <- sample(other_genes, size = 240, replace = FALSE)
+
+# Join the two selections into one artificial list
+control_genes <- c(chosen_p450, chosen_other)
+
+# Check its total size and its P450 overlap
+control_size <- length(control_genes)
+control_overlap <- sum(control_genes %in% p450_genes)
+control_size       # 300 genes in total
+control_overlap    # 60 of them are P450 genes
 ```
 
-The machinery works. So when the real data gives nothing, that is a statement about
-the data, not a bug.
+**Read the R:** `sample()` randomly chooses gene IDs from a pool. `size` says how
+many to choose, and `replace = FALSE` prevents choosing the same gene twice.
+`c()` joins the two selections. `set.seed(1)` makes the random choices repeatable
+for the same inputs; **1 is just a seed label**, not the number of genes to select.
+The identities are random, but the counts are fixed because we requested exactly
+60 P450 and 240 other genes.
+
+### Test the artificial list in the same way
+
+```r
+# Expected P450 count if all 300 genes had been drawn randomly from the background
+control_expected <- control_size * background_fraction
+
+# Compare the 60 P450 genes we deliberately included with that expectation
+control_fold <- control_overlap / control_expected
+
+# Same test as before, but using the artificial list's size and overlap
+control_pvalue <- phyper(
+  q = control_overlap - 1,  # ask for 60 or more, by asking for more than 59
+  m = set_size,            # same background P450 pool as before
+  n = other_size,          # same background non-P450 pool as before
+  k = control_size,        # now selecting a list of 300 genes
+  lower.tail = FALSE
+)
+
+control_expected
+control_fold
+control_pvalue
+```
+
+You should find a large fold enrichment and a small p-value: the test detects the
+P450 enrichment we deliberately created. This is a **check of the calculation**,
+not a biological discovery and not proof that every part of the analysis is
+correct. A non-significant result for the real list can still be a valid outcome.
 
 ## 4.4 Test every category
 
 ```r
+# Background and selected-list sizes stay the same for every category
+N <- length(universe)
+n <- length(de_genes)
+
 res_enrich <- data.frame()
 for (tm in unique(gene_sets$term_name)) {
   sg <- gene_sets$gene[gene_sets$term_name == tm]
