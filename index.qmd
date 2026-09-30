@@ -1161,30 +1161,131 @@ considering possible explanations; the PCA alone cannot tell you what caused a
 separation.
 :::
 
-### 3.4c Sample distances: check the pattern another way {#sec-sample-clustering}
+### 3.4c Sample clustering: a tree and a distance heatmap {#sec-sample-clustering}
 
 We now cluster samples using **all retained genes' VST values**, rather than only
-the 500 genes used above. `t()` transposes the matrix so that samples become rows;
-`dist()` then calculates Euclidean distances between their expression profiles.
-`hclust()` groups similar samples into a tree (using complete linkage by default).
+the 500 genes used above. The question is: **which samples have the most similar
+overall expression profiles?** These are clusters of samples, not the clusters of
+genes in §4.7. The group assignment asks you to show these relationships as a
+**sample-distance heatmap**, which we will build below.
+
+Use the `vsd` object from §3.4a. If you restarted R, rerun §§3.1 and 3.3, then
+`vsd <- vst(dds, blind = FALSE)` before continuing.
+
+**Step 1 — Calculate the distance between every pair of samples.**
 
 ```r
-d <- dist(t(assay(vsd)))
-plot(hclust(d), labels = colnames(vsd), main = "Sample clustering", xlab = "", sub = "")
+# Extract transformed expression: genes are rows, samples are columns
+vst_values <- assay(vsd)
+
+# Turn the matrix around so that each row is one sample
+sample_profiles <- t(vst_values)
+
+# Compare every sample with every other sample
+sampleDists <- dist(sample_profiles)
+
+# Display these same distances as a square table
+sampleDistMatrix <- as.matrix(sampleDists)
+round(sampleDistMatrix, 1)   # round only for printing, not for the analysis
+```
+
+`dist()` calculates **Euclidean distance**: differences in VST expression across
+genes are combined into one number for each pair of samples. Small distances mean
+similar profiles; large distances mean more different profiles. A sample's
+distance from itself is zero. The table has samples on **both** axes: here it is
+12 × 12, not genes × samples. `as.matrix()` changes the display format, not the
+distances.
+
+**Step 2 — First view the clustering as a tree.**
+
+```r
+# Join similar samples into clusters, then join those clusters
+sample_tree <- hclust(sampleDists, method = "complete")
+plot(sample_tree, main = "Sample clustering", xlab = "", sub = "")
 ```
 
 **Read the tree:** each leaf is a sample. Branches joining at lower heights link
 more similar samples or clusters. Height measures the dissimilarity at which a
 merge occurs; it is not a p-value or a percentage. The left-to-right order of the
-leaves is not itself a distance scale. This clustering uses all VST dimensions,
-whereas the PCA picture shows only two components of a selected gene set, so the
-two displays need not agree perfectly.
+leaves is not itself a distance scale. We use **complete linkage**: the distance
+between two clusters is the largest distance between any pair of samples across
+the two clusters.
 
-*Questions:* Do replicates cluster together? Does the main pattern agree with the
-PCA? If a sample looks unusual in both plots, what would you check before deciding
-whether it should be excluded?
+**Step 3 — Prepare the heatmap colours and condition labels.**
+
+```r
+library(pheatmap)
+library(RColorBrewer)
+
+# Nine blue shades, reversed so that small distances are dark blue
+blue_shades <- rev(brewer.pal(9, "Blues"))
+
+# Make a smooth gradient of 255 colours from those shades
+distance_colors <- colorRampPalette(blue_shades)(255)
+
+# Match each sample name to its condition for the annotation strip
+sample_annotation <- data.frame(condition = vsd$condition)
+rownames(sample_annotation) <- colnames(vsd)
+```
+
+`library()` loads a package; it does not install it. If ERDA cannot find these
+packages using the two `library()` lines above, try the course-image library:
+
+```r
+library("pheatmap", lib.loc = "/opt/conda/envs/r/lib/R/library")
+library("RColorBrewer", lib.loc = "/opt/conda/envs/r/lib/R/library")
+```
+
+Then rerun the colour and annotation lines. The `lib.loc` path is specific to that
+ERDA environment; it is not needed on a computer where R already finds the packages.
+
+**Step 4 — Plot the sample-distance heatmap.**
+
+```r
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows = sampleDists,  # use the distances from step 1
+         clustering_distance_cols = sampleDists,  # same samples on both axes
+         clustering_method = "complete",         # same method as our tree
+         scale = "none",                         # keep the actual distances
+         annotation_col = sample_annotation,     # show each sample's condition
+         col = distance_colors,
+         main = "Sample distances (VST)")
+```
+
+The two `clustering_distance` arguments tell `pheatmap()` to use our existing
+sample distances for both trees. Without them, it would calculate new distances
+between the rows and columns of the distance table, rather than use the distances
+we calculated from expression. This follows the
+[DESeq2 sample-distance example](https://bioconductor.org/help/course-materials/2015/BioC2015/bioc2015rnaseq.html).
+
+**Read the heatmap:**
+
+- Every square compares **two samples**, one from each axis. It does not show the
+  expression of one gene.
+- With our reversed blue palette, **dark blue means a small distance** (similar
+  profiles); pale colours mean a larger distance. Read the numeric colour legend.
+- The diagonal is dark because each sample has distance zero from itself. The
+  two halves mirror each other: distance from A to B equals distance from B to A.
+- Dark blocks around the diagonal can reveal groups of similar samples. The trees
+  reorder the rows and columns to bring clustered samples together.
+- The condition strip labels the samples; it does **not** tell the clustering
+  algorithm which samples should group together. Keep unique sample names on both
+  axes so that you can identify individual replicates.
+
+This clustering uses all VST dimensions, whereas the PCA picture shows only two
+components of a selected gene set, so the two displays need not agree perfectly.
+
+*Questions:*
+
+1. Find two different samples with a dark square between them. What does that mean?
+2. Do replicates cluster together? Use the sample names and condition strip to
+   describe any exceptions.
+3. Does the main pattern agree with the PCA? If a sample looks unusual in both
+   plots, what would you check before deciding whether it should be excluded?
 
 ::: {.callout-tip collapse="true" title="Discussion: sample distances"}
+An off-diagonal dark square means two different samples have similar overall
+transformed expression profiles; it does not mean that they have low expression.
 Look for replicates joining one another before they join other conditions, and
 describe any exceptions. Agreement between the PCA and tree supports the same
 broad sample relationships; disagreement can reflect the different gene sets and
@@ -2102,17 +2203,38 @@ hyphae; and the expression of the virulence factor **SOWgp** across all four
 conditions.
 :::
 
-Everything the assignment asks for, you have already done in this workbook — only
-the organism changes:
+Use the worked examples below as templates, but rebuild `dds` with the
+**assignment's count table and matching sample metadata** first. Do not reuse the
+`dds` or `vsd` objects from the *C. fructicola* exercise: these would plot the wrong
+organism. The assignment has 8 samples, so its sample-distance matrix is 8 × 8.
 
 | Assignment asks for | Practised in |
 |---|---|
-| PCA of transformed values | [§3.4](#sec-de) |
-| Heatmap / clustering of sample distances | [§3.4](#sec-de) |
+| PCA of rlog values | [§3.4b: reading a PCA](#sec-pca-check), with the rlog adaptation below |
+| Heatmap / clustering of VST sample distances | [§3.4c: complete worked example](#sec-sample-clustering) |
 | Prefilter + DESeq2 run, dispersion plot | [§3.1](#sec-de), [§3.3 dispersion check](#sec-dispersion-check) |
 | Size factors, smallest library | [§3.3](#sec-de) |
 | Genes up in one condition | [§3.5](#sec-de)–[§3.7](#sec-de) |
 | Expression of one named gene across conditions | the *Your turn* in [§3.7](#sec-de) |
+
+**Two transformed copies for the assignment.** Our worked PCA used VST, but the
+assignment requests **rlog for PCA** and **VST for the distance heatmap**. Both are
+transformations for exploring expression patterns; neither replaces the counts
+used by DESeq2 for testing. After fitting the assignment's `dds`, and using a
+metadata column named `condition`, run:
+
+```r
+# PCA: use the rlog transformation requested by the assignment
+rld <- rlog(dds, blind = FALSE)
+plotPCA(rld, intgroup = "condition", ntop = 500)
+
+# Heatmap: prepare VST values, then run steps 1–4 of §3.4c
+vsd <- vst(dds, blind = FALSE)
+```
+
+The heatmap code needs no organism-specific changes: it takes sample names and
+condition labels from your new `vsd` object. Describe the patterns you actually
+observe, including any unexpected replicates; do not just include the figures.
 
 ---
 
